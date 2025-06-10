@@ -305,36 +305,44 @@ export const deleteConversation = async (conversationId) => {
       throw new Error('未登录或登录已过期，请重新登录');
     }
     
-    // 与Web端保持一致的API路径
+    // 构建请求URL，确保格式正确
     const url = `${API_BASE_URL}/api/chat-history/conversations/${conversationId}`;
     
     console.log(`发送删除请求到: ${url}`);
+    console.log(`使用的认证令牌: ${token.substring(0, 10)}...`);
     
-    // 发送DELETE请求
+    // 严格按照示例中的请求格式发送DELETE请求
     const response = await fetch(url, {
       method: 'DELETE',
       headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
+        'accept': 'application/json',
+        'Authorization': `Bearer ${token}`
       }
     });
     
     console.log(`删除请求响应状态: ${response.status}`);
     
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`删除请求失败，状态码: ${response.status}, 响应内容: ${errorText}`);
+      
       if (response.status === 401) {
         throw new Error('登录已过期，请重新登录');
-      } else if (response.status === 404) {
-        console.warn(`对话在服务器上不存在: ${conversationId}`);
-        return { message: '历史记录已删除（服务器上未找到对应记录）' };
       } else {
-        throw new Error(`删除失败: ${response.status}`);
+        throw new Error(`删除失败: ${response.status} ${errorText}`);
       }
     }
     
-    // 解析响应
-    const result = await response.json();
-    return result;
+    // 尝试解析响应
+    try {
+      const result = await response.json();
+      console.log(`删除成功，响应:`, result);
+      return result;
+    } catch (e) {
+      // 如果响应不是JSON格式，直接返回成功消息
+      console.log(`删除成功，但响应不是JSON格式`);
+      return { message: '删除成功' };
+    }
   } catch (error) {
     console.error('删除对话API错误:', error);
     throw error;

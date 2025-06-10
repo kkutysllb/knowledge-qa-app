@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Alert } from 'react-native';
 import { v4 as uuidv4 } from 'uuid';
+import apiConfig from '../config/api.config';
 import {
   deleteConversation,
   getConversationMessages,
@@ -539,9 +540,9 @@ export const ChatProvider = ({ children }) => {
   const deleteConversationById = async (id) => {
     try {
       setLoading(true);
-      console.log(`开始删除对话: ${id}`);
+      console.log(`=== 开始删除对话: ${id} ===`);
       
-      // 先更新本地状态，提供即时反馈，与Web端逻辑一致
+      // 先更新本地状态，提供即时反馈
       const updatedConversations = conversations.filter(conv => conv.id !== id);
       setConversations(updatedConversations);
       
@@ -553,6 +554,8 @@ export const ChatProvider = ({ children }) => {
       
       // 检查token
       const token = await AsyncStorage.getItem('token');
+      console.log(`=== 当前token状态: ${token ? '存在' : '不存在'} ===`);
+      
       if (!token) {
         // 未登录状态只能本地删除
         Alert.alert('提示', '未登录状态下仅支持本地删除');
@@ -560,17 +563,87 @@ export const ChatProvider = ({ children }) => {
       }
       
       // 发送删除请求到服务器
-      const result = await deleteConversation(id);
-      console.log(`服务器删除结果:`, result);
-      
-      // 删除成功后刷新会话列表
-      await loadConversations();
+      console.log(`=== 准备调用deleteConversation(${id}) ===`);
+      try {
+        const result = await deleteConversation(id);
+        console.log(`=== 服务器删除结果: ===`, result);
+        
+        // 删除成功后刷新会话列表
+        await loadConversations();
+        console.log(`=== 会话列表已刷新 ===`);
+      } catch (deleteError) {
+        console.error(`=== deleteConversation调用失败: ===`, deleteError);
+        throw deleteError;
+      }
     } catch (err) {
-      console.error(`删除对话失败:`, err);
+      console.error(`=== 删除对话失败: ===`, err);
       Alert.alert('错误', `删除对话失败: ${err.message}`);
       
       // 删除失败，重新加载对话列表
       await loadConversations();
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // 直接测试删除API - 用于UI直接调用
+  const testDeleteAPI = async (id) => {
+    try {
+      setLoading(true);
+      console.log(`=== 直接测试删除API: ${id} ===`);
+      
+      // 检查token
+      const token = await AsyncStorage.getItem('token');
+      console.log(`=== 当前token状态: ${token ? '存在' : '不存在'} ===`);
+      
+      if (!token) {
+        Alert.alert('提示', '未登录状态下不能删除对话');
+        return;
+      }
+      
+      // 使用配置文件中的API地址
+      const API_URL = apiConfig.API_BASE_URL;
+      const url = `${API_URL}/api/chat-history/conversations/${id}`;
+      
+      console.log(`=== 直接发送DELETE请求到: ${url} ===`);
+      
+      const response = await fetch(url, {
+        method: 'DELETE',
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      console.log(`=== 测试删除API响应状态: ${response.status} ===`);
+      
+      try {
+        const responseText = await response.text();
+        console.log(`=== 测试删除API响应内容: ${responseText} ===`);
+        
+        // 响应成功
+        if (response.ok) {
+          // 更新本地状态
+          setConversations(prev => prev.filter(conv => conv.id !== id));
+          
+          // 如果删除的是当前对话，重置当前对话
+          if (id === currentConversationId) {
+            setCurrentConversationId(null);
+            setMessages([initialSystemMessage]);
+          }
+          
+          // 刷新对话列表
+          await loadConversations();
+          Alert.alert('成功', '对话已删除');
+        } else {
+          Alert.alert('错误', `删除失败: ${response.status} ${responseText}`);
+        }
+      } catch (e) {
+        console.error('解析响应失败:', e);
+      }
+    } catch (err) {
+      console.error(`=== 直接API调用失败: ===`, err);
+      Alert.alert('错误', `删除失败: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -595,6 +668,7 @@ export const ChatProvider = ({ children }) => {
     selectConversation,
     sendMessage,
     deleteConversationById,
+    testDeleteAPI,
     setSelectedModel,
     setUseKnowledgeBase,
     setSelectedKnowledgeBase,

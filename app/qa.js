@@ -55,27 +55,29 @@ const QAScreen = () => {
   // 获取认证和聊天上下文
   const { isAuthenticated, user, logout } = useAuth();
   const {
-    conversations,
-    currentConversationId,
     messages,
+    conversations,
     loading,
-    isStreaming,
-    selectedModel,
-    useKnowledgeBase,
-    selectedKnowledgeBase,
-    createNewConversation,
-    selectConversation,
+    currentConversationId,
+    error,
     sendMessage,
+    loadConversations,
+    selectConversation,
+    isStreaming,
+    streamingContent,
+    createNewConversation,
     deleteConversationById,
+    testDeleteAPI,
+    selectedModel,
     setSelectedModel,
+    useKnowledgeBase,
     setUseKnowledgeBase,
+    selectedKnowledgeBase,
     setSelectedKnowledgeBase,
-    setIsStreaming,
     currentAttachment,
     setAttachment,
     removeAttachment,
-    isProcessingAttachment,
-    loadConversations
+    isProcessingAttachment
   } = useChat();
   
   // 判断是否是深色模式
@@ -586,35 +588,36 @@ const QAScreen = () => {
                 currentConversationId === item.id && { backgroundColor: isDark ? '#333' : '#f0f0f0' }
               ]}
             >
-              <TouchableOpacity 
-                style={{flex: 1}}
+              {/* 左侧内容区域 */}
+              <TouchableOpacity
+                style={styles.historyItemContent} 
                 onPress={() => handleSelectChat(item)}
               >
-                <View style={styles.historyItemContent}>
-                  <Text 
-                    style={[styles.historyTitle, { color: theme.text }]}
-                    numberOfLines={1}
-                  >
-                    {item.title}
-                  </Text>
-                  <Text style={[styles.historyDate, { color: theme.textSecondary }]}>
-                    {formatDate(item.updated_at)}
-                  </Text>
-                </View>
+                <Text 
+                  style={[styles.historyTitle, { color: theme.text }]}
+                  numberOfLines={1}
+                >
+                  {item.title}
+                </Text>
+                <Text style={[styles.historyDate, { color: theme.textSecondary }]}>
+                  {formatDate(item.updated_at)}
+                </Text>
               </TouchableOpacity>
               
-              {/* 添加删除按钮 */}
-              <IconButton
+              {/* 右侧删除按钮 - 使用Button组件，与测试成功的顶部按钮保持一致 */}
+              <Button
                 icon="trash-can-outline"
-                size={20}
-                iconColor={theme.error}
-                onPress={(e) => {
-                  console.log("删除按钮被点击");
-                  e.stopPropagation(); // 阻止事件冒泡
-                  handleDeleteChat(item.id);
+                mode="text"
+                onPress={() => {
+                  // 这里直接调用测试函数，因为我们知道它可以工作
+                  console.log(`历史列表删除按钮点击: ${item.id}`);
+                  testDeleteAPI(item.id);
                 }}
-                style={styles.deleteButton}
-              />
+                style={{ marginLeft: 5 }}
+                color={theme.error}
+              >
+                删除
+              </Button>
             </View>
           )}
           ListEmptyComponent={
@@ -680,6 +683,22 @@ const QAScreen = () => {
             新对话
           </Text>
           <View style={styles.headerRightContainer}>
+            {/* 测试删除API按钮 */}
+            {currentConversationId && (
+              <IconButton
+                icon="bug-check"
+                size={24}
+                iconColor={theme.error}
+                onPress={() => {
+                  console.log('测试删除按钮点击 - 顶部导航');
+                  if (currentConversationId) {
+                    testDeleteAPI(currentConversationId);
+                  } else {
+                    Alert.alert('提示', '请先选择一个对话');
+                  }
+                }}
+              />
+            )}
             <IconButton
               icon={isStreaming ? "volume-high" : "volume-off"}
               size={24}
