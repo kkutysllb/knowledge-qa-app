@@ -1,0 +1,506 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Crypto from 'expo-crypto';
+import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
+import apiConfig from '../config/api.config';
+
+// 从配置文件中获取API基础URL
+const API_BASE_URL = apiConfig.API_BASE_URL;
+
+/**
+ * 加密密码函数 - 使用SHA-256哈希，生成64位小写十六进制字符串
+ * @param {string} password - 明文密码
+ * @returns {Promise<string>} - 加密后的密码
+ */
+export const encryptPassword = async (password) => {
+  try {
+    // 使用SHA-256生成摘要，返回64位小写十六进制字符串
+    const digest = await Crypto.digestStringAsync(
+      Crypto.CryptoDigestAlgorithm.SHA256,
+      password
+    );
+    // 确保返回的是小写字符串
+    return digest.toLowerCase();
+  } catch (error) {
+    console.error('密码加密失败:', error);
+    // 加密失败时返回原始密码
+    return password;
+  }
+};
+
+/**
+ * 封装的API请求函数
+ * @param {string} endpoint - API端点
+ * @param {Object} options - fetch选项
+ * @returns {Promise<any>} 响应数据
+ */
+export const apiRequest = async (endpoint, options = {}) => {
+  try {
+    // 获取认证令牌
+    const token = await AsyncStorage.getItem('token');
+    
+    // 设置默认headers
+    const headers = {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    };
+    
+    // 如果有token，添加到headers
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    } else {
+      console.error('API请求缺少认证令牌');
+    }
+    
+    // 构建完整URL
+    const url = `${API_BASE_URL}${endpoint}`;
+    console.log(`API请求: ${options.method || 'GET'} ${url}`);
+    
+    // 发送请求
+    const response = await fetch(url, {
+      ...options,
+      headers,
+    });
+    
+    // 检查响应状态
+    if (!response.ok) {
+      // 如果是401错误（未授权），清除令牌并提示用户重新登录
+      if (response.status === 401) {
+        console.error('未授权访问，需要重新登录');
+        await AsyncStorage.removeItem('token');
+        throw new Error('登录已过期，请重新登录');
+      }
+      
+      throw new Error(`请求失败: ${response.status} ${response.statusText}`);
+    }
+    
+    // 检查响应内容类型
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      return await response.json();
+    }
+    
+    return await response.text();
+  } catch (error) {
+    console.error('API请求错误:', error);
+    throw error;
+  }
+};
+
+/**
+ * 选择文档文件（PDF、Word、Excel等）
+ * @returns {Promise<DocumentPicker.DocumentResult>} 选择结果
+ */
+export const pickDocument = async () => {
+  try {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: [
+        'application/pdf',                                                     // PDF
+        'application/msword',                                                  // DOC
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // DOCX
+        'application/vnd.ms-excel',                                            // XLS
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',   // XLSX
+        'application/vnd.ms-powerpoint',                                       // PPT
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation', // PPTX
+        'text/plain',                                                          // TXT
+        'text/csv',                                                            // CSV
+        'text/markdown'                                                        // MD
+      ],
+      copyToCacheDirectory: true
+    });
+    
+    return result;
+  } catch (error) {
+    console.error('选择文档失败:', error);
+    throw error;
+  }
+};
+
+/**
+ * 选择图片
+ * @returns {Promise<ImagePicker.ImagePickerResult>} 选择结果
+ */
+export const pickImage = async () => {
+  try {
+    // 请求媒体库权限
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      throw new Error('需要相册权限才能选择图片');
+    }
+    
+    // 支持的图片类型包括: jpg, jpeg, png, bmp, gif, tiff
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: false,
+      quality: 0.8,
+    });
+    
+    return result;
+  } catch (error) {
+    console.error('选择图片失败:', error);
+    throw error;
+  }
+};
+
+/**
+ * 带文件上传的知识库问答请求
+ * @param {string} query - 问题内容
+ * @param {Object} file - 文件对象，包含uri、name、type等
+ * @param {boolean} useKb - 是否使用知识库
+ * @param {string} model - 使用的模型名称
+ * @param {string} kbName - 知识库名称
+ * @param {boolean} stream - 是否使用流式响应
+ * @returns {Promise<Object>} 知识库问答响应
+ */
+export const knowledgeQAWithFile = async (
+  query,
+  file,
+  useKb = true,
+  model = 'default',
+  kbName = 'default',
+  stream = false
+) => {
+  try {
+    // 获取认证令牌
+    const token = await AsyncStorage.getItem('token');
+    
+    // 创建FormData对象
+    const formData = new FormData();
+    formData.append('query', query);
+    formData.append('use_kb', useKb.toString());
+    formData.append('model', model);
+    formData.append('kb_name', kbName);
+    formData.append('stream', stream.toString());
+    
+    // 添加文件
+    if (file) {
+      const fileToUpload = {
+        uri: file.uri,
+        name: file.name,
+        type: file.mimeType || 'application/octet-stream'
+      };
+      formData.append('file', fileToUpload);
+    }
+    
+    // 设置headers
+    const headers = {
+      'Content-Type': 'multipart/form-data',
+    };
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    // 构建URL
+    const url = `${API_BASE_URL}/api/workflows/knowledge-qa/upload`;
+    
+    // 如果是流式响应，返回处理函数
+    if (stream) {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Stream request failed: ${response.status}`);
+      }
+      
+      return response;
+    } else {
+      // 普通响应
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        const text = await response.text();
+        try {
+          const errorData = JSON.parse(text);
+          throw new Error(errorData.message || `请求失败: ${response.status}`);
+        } catch (e) {
+          throw new Error(`请求失败: ${response.status}, ${text.substring(0, 100)}`);
+        }
+      }
+      
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        return await response.json();
+      }
+      
+      return await response.text();
+    }
+  } catch (error) {
+    console.error('文件上传问答请求失败:', error);
+    throw error;
+  }
+};
+
+/**
+ * 登录API
+ * @param {string} username - 用户名
+ * @param {string} password - 密码
+ * @returns {Promise<Object>} 登录响应
+ */
+export const login = async (username, password) => {
+  // 先使用SHA-256哈希加密密码
+  const encryptedPassword = await encryptPassword(password);
+  
+  return apiRequest('/api/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ username, password: encryptedPassword }),
+  });
+};
+
+/**
+ * 获取用户信息
+ * @returns {Promise<Object>} 用户信息
+ */
+export const getUserInfo = async () => {
+  return apiRequest('/api/auth/me');
+};
+
+/**
+ * 获取历史对话列表
+ * @returns {Promise<Array>} 对话列表
+ */
+export const getConversations = async () => {
+  return apiRequest('/api/chat-history/conversations');
+};
+
+/**
+ * 获取单个对话的消息
+ * @param {string} conversationId - 对话ID
+ * @returns {Promise<Array>} 消息列表
+ */
+export const getConversationMessages = async (conversationId) => {
+  return apiRequest(`/api/chat-history/conversations/${conversationId}/messages`);
+};
+
+/**
+ * 创建或更新对话
+ * @param {Object} conversation - 对话数据
+ * @returns {Promise<Object>} 创建结果
+ */
+export const saveConversation = async (conversation) => {
+  return apiRequest('/api/chat-history/conversations', {
+    method: 'POST',
+    body: JSON.stringify(conversation),
+  });
+};
+
+/**
+ * 删除对话
+ * @param {string} conversationId - 对话ID
+ * @returns {Promise<Object>} 删除结果
+ */
+export const deleteConversation = async (conversationId) => {
+  try {
+    // 获取认证令牌
+    const token = await AsyncStorage.getItem('token');
+    
+    if (!token) {
+      throw new Error('未登录或登录已过期，请重新登录');
+    }
+    
+    // 与Web端保持一致的API路径
+    const url = `${API_BASE_URL}/api/chat-history/conversations/${conversationId}`;
+    
+    console.log(`发送删除请求到: ${url}`);
+    
+    // 发送DELETE请求
+    const response = await fetch(url, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    console.log(`删除请求响应状态: ${response.status}`);
+    
+    if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error('登录已过期，请重新登录');
+      } else if (response.status === 404) {
+        console.warn(`对话在服务器上不存在: ${conversationId}`);
+        return { message: '历史记录已删除（服务器上未找到对应记录）' };
+      } else {
+        throw new Error(`删除失败: ${response.status}`);
+      }
+    }
+    
+    // 解析响应
+    const result = await response.json();
+    return result;
+  } catch (error) {
+    console.error('删除对话API错误:', error);
+    throw error;
+  }
+};
+
+/**
+ * 发送知识库问答请求
+ * @param {Object} data - 问答请求数据
+ * @returns {Promise<Object>} 知识库问答响应
+ */
+export const knowledgeQA = async (data) => {
+  return apiRequest('/api/workflows/knowledge-qa', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+};
+
+/**
+ * 流式知识库问答请求
+ * @param {Object} data - 问答请求数据
+ * @param {Function} onChunk - 处理每个响应块的回调
+ * @returns {Promise<void>}
+ */
+export const streamKnowledgeQA = async (data, onChunk) => {
+  try {
+    const token = await AsyncStorage.getItem('token');
+    
+    const headers = {
+      'Content-Type': 'application/json',
+    };
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    // 设置流式数据
+    data.stream = true;
+    
+    const response = await fetch(`${API_BASE_URL}/api/workflows/knowledge-qa`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(data),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Stream request failed: ${response.status}`);
+    }
+    
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    
+    // 读取流
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      
+      // 解码内容
+      const chunk = decoder.decode(value, { stream: true });
+      
+      // 处理SSE格式
+      const lines = chunk.split('\n\n');
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.substring(6);
+          if (data === '[DONE]') {
+            // 流结束
+            break;
+          }
+          
+          try {
+            // 解析JSON
+            const parsedData = JSON.parse(data);
+            onChunk(parsedData);
+          } catch (e) {
+            console.error('解析响应块错误:', e);
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('流式请求错误:', error);
+    throw error;
+  }
+};
+
+/**
+ * 流式带文件上传的知识库问答请求
+ * @param {string} query - 问题内容
+ * @param {Object} file - 文件对象
+ * @param {boolean} useKb - 是否使用知识库
+ * @param {string} model - 使用的模型名称
+ * @param {string} kbName - 知识库名称
+ * @param {Function} onChunk - 处理每个响应块的回调
+ * @returns {Promise<void>}
+ */
+export const streamKnowledgeQAWithFile = async (
+  query,
+  file,
+  useKb = true,
+  model = 'default',
+  kbName = 'default',
+  onChunk
+) => {
+  try {
+    const response = await knowledgeQAWithFile(
+      query,
+      file,
+      useKb,
+      model,
+      kbName,
+      true
+    );
+    
+    if (!response.ok) {
+      throw new Error(`Stream request failed: ${response.status}`);
+    }
+    
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    
+    // 读取流
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      
+      // 解码内容
+      const chunk = decoder.decode(value, { stream: true });
+      
+      // 处理SSE格式
+      const lines = chunk.split('\n\n');
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.substring(6);
+          if (data === '[DONE]') {
+            // 流结束
+            break;
+          }
+          
+          try {
+            // 解析JSON
+            const parsedData = JSON.parse(data);
+            onChunk(parsedData);
+          } catch (e) {
+            console.error('解析响应块错误:', e);
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('流式文件上传请求错误:', error);
+    throw error;
+  }
+};
+
+export default {
+  login,
+  getUserInfo,
+  getConversations,
+  getConversationMessages,
+  saveConversation,
+  deleteConversation,
+  knowledgeQA,
+  streamKnowledgeQA,
+  pickDocument,
+  pickImage,
+  knowledgeQAWithFile,
+  streamKnowledgeQAWithFile,
+}; 

@@ -8,6 +8,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 // 导入主题相关
 import { createTheme } from '../src/theme/theme';
 // 导入主题上下文提供者
+import { AuthProvider } from '../src/context/AuthContext';
+import { ChatProvider } from '../src/context/ChatContext';
 import { ThemeProvider, ThemeType, useTheme } from '../src/context/ThemeContext';
 
 // 创建一个包装组件来使用ThemeContext
@@ -40,14 +42,18 @@ const ThemedApp = () => {
   return (
     <PaperProvider theme={paperTheme}>
       <SafeAreaProvider>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="index" />
-          <Stack.Screen name="login" />
-          <Stack.Screen name="qa" />
-          <Stack.Screen name="settings" />
-          <Stack.Screen name="+not-found" />
-        </Stack>
-        <StatusBar style={statusBarStyle} />
+        <AuthProvider>
+          <ChatProvider>
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="index" />
+              <Stack.Screen name="login" />
+              <Stack.Screen name="qa" />
+              <Stack.Screen name="settings" />
+              <Stack.Screen name="+not-found" />
+            </Stack>
+            <StatusBar style={statusBarStyle} />
+          </ChatProvider>
+        </AuthProvider>
       </SafeAreaProvider>
     </PaperProvider>
   );
@@ -103,7 +109,11 @@ export default function RootLayout() {
   return (
     <ErrorBoundary>
       <ThemeProvider>
-        <ThemedApp />
+        <AuthProvider>
+          <ChatProvider>
+            <ThemedApp />
+          </ChatProvider>
+        </AuthProvider>
       </ThemeProvider>
     </ErrorBoundary>
   );

@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   Dimensions,
   TextInput as RNTextInput,
   StatusBar,
@@ -11,10 +12,12 @@ import {
 } from 'react-native';
 import {
   Checkbox,
+  Snackbar,
   Text
 } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Logo from '../src/assets/logo';
+import { useAuth } from '../src/context/AuthContext';
 import { ThemeType, useTheme } from '../src/context/ThemeContext';
 
 const { width, height } = Dimensions.get('window');
@@ -22,10 +25,12 @@ const { width, height } = Dimensions.get('window');
 const LoginScreen = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
   const [secureTextEntry, setSecureTextEntry] = useState(true);
   const [checked, setChecked] = useState(false);
+  const [snackbarVisible, setSnackbarVisible] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
   const { theme, themeType, currentThemeType, getStatusBarStyle } = useTheme();
+  const { isAuthenticated, login, loading, error, clearError } = useAuth();
   
   // 判断是否是深色模式
   const isDark = currentThemeType === ThemeType.DARK;
@@ -33,17 +38,61 @@ const LoginScreen = () => {
   // 创建动态样式
   const dynamicStyles = useMemo(() => createStyles(theme, isDark), [theme, isDark]);
   
+  // 监听登录状态变化
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.replace('/qa');
+    }
+  }, [isAuthenticated]);
+  
+  // 监听错误状态
+  useEffect(() => {
+    if (error) {
+      setSnackbarMessage(error);
+      setSnackbarVisible(true);
+    }
+  }, [error]);
+  
   const toggleSecureEntry = () => {
     setSecureTextEntry(!secureTextEntry);
   };
 
-  const handleLogin = () => {
-    setIsLoading(true);
-    // 模拟登录过程
-    setTimeout(() => {
-      setIsLoading(false);
-      router.push('/qa');
-    }, 1500);
+  const handleLogin = async () => {
+    if (!username.trim()) {
+      setSnackbarMessage('请输入用户名');
+      setSnackbarVisible(true);
+      return;
+    }
+    
+    if (!password.trim()) {
+      setSnackbarMessage('请输入密码');
+      setSnackbarVisible(true);
+      return;
+    }
+    
+    if (!checked) {
+      setSnackbarMessage('请阅读并同意用户协议与隐私政策');
+      setSnackbarVisible(true);
+      return;
+    }
+    
+    try {
+      // 调用登录函数
+      const success = await login(username, password);
+      if (success) {
+        console.log('登录成功，即将跳转到问答页面');
+      }
+    } catch (error) {
+      // 错误已经在AuthContext中处理，这里只需处理额外的UI反馈
+      console.error('登录失败:', error);
+      setSnackbarMessage(error.message || '登录失败，请检查网络连接');
+      setSnackbarVisible(true);
+    }
+  };
+  
+  const handleDismissSnackbar = () => {
+    setSnackbarVisible(false);
+    clearError();
   };
 
   return (
@@ -75,6 +124,8 @@ const LoginScreen = () => {
               style={dynamicStyles.input}
               placeholderTextColor={theme.placeholderText}
               color={theme.text}
+              autoCapitalize="none"
+              editable={!loading}
             />
           </View>
           
@@ -94,10 +145,12 @@ const LoginScreen = () => {
                 style={dynamicStyles.input}
                 placeholderTextColor={theme.placeholderText}
                 color={theme.text}
+                editable={!loading}
               />
               <TouchableOpacity 
                 style={dynamicStyles.eyeIconContainer} 
                 onPress={toggleSecureEntry}
+                disabled={loading}
               >
                 <Ionicons 
                   name={secureTextEntry ? "eye-off-outline" : "eye-outline"} 
@@ -113,6 +166,7 @@ const LoginScreen = () => {
               status={checked ? 'checked' : 'unchecked'}
               onPress={() => setChecked(!checked)}
               color={theme.primary}
+              disabled={loading}
             />
             <Text style={dynamicStyles.termsText}>
               已阅读并同意 
@@ -125,14 +179,16 @@ const LoginScreen = () => {
           <TouchableOpacity 
             style={[
               dynamicStyles.loginButton, 
-              (!username || !password || !checked) && dynamicStyles.loginButtonDisabled
+              (!username || !password || !checked || loading) && dynamicStyles.loginButtonDisabled
             ]}
             onPress={handleLogin}
-            disabled={!username || !password || !checked || isLoading}
+            disabled={!username || !password || !checked || loading}
           >
-            <Text style={dynamicStyles.loginButtonText}>
-              {isLoading ? '登录中...' : '登录'}
-            </Text>
+            {loading ? (
+              <ActivityIndicator color={theme.buttonText} />
+            ) : (
+              <Text style={dynamicStyles.loginButtonText}>登录</Text>
+            )}
           </TouchableOpacity>
         </View>
         <View style={dynamicStyles.footerContainer}>
@@ -140,6 +196,18 @@ const LoginScreen = () => {
             陕西移动网管中心自研团队 5GC"智擎"平台知识库问答 v1.0.0
           </Text>
         </View>
+        
+        <Snackbar
+          visible={snackbarVisible}
+          onDismiss={handleDismissSnackbar}
+          duration={3000}
+          style={{ backgroundColor: isDark ? '#333' : '#f0f0f0' }}
+          wrapperStyle={{ bottom: 80 }}
+        >
+          <Text style={{ color: isDark ? '#fff' : '#333' }}>
+            {snackbarMessage}
+          </Text>
+        </Snackbar>
       </SafeAreaView>
     </View>
   );
