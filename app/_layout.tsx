@@ -41,21 +41,21 @@ const ThemedApp = () => {
   
   return (
     <PaperProvider theme={paperTheme}>
-      <SafeAreaProvider>
+        <SafeAreaProvider>
         <AuthProvider>
           <ChatProvider>
-            <Stack screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="index" />
-              <Stack.Screen name="login" />
-              <Stack.Screen name="qa" />
-              <Stack.Screen name="settings" />
-              <Stack.Screen name="+not-found" />
-            </Stack>
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="index" />
+            <Stack.Screen name="login" />
+            <Stack.Screen name="qa" />
+            <Stack.Screen name="settings" />
+            <Stack.Screen name="+not-found" />
+          </Stack>
             <StatusBar style={statusBarStyle} />
           </ChatProvider>
         </AuthProvider>
-      </SafeAreaProvider>
-    </PaperProvider>
+        </SafeAreaProvider>
+      </PaperProvider>
   );
 };
 
@@ -114,7 +114,7 @@ export default function RootLayout() {
             <ThemedApp />
           </ChatProvider>
         </AuthProvider>
-      </ThemeProvider>
+    </ThemeProvider>
     </ErrorBoundary>
   );
 }

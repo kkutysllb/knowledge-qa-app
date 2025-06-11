@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import {
+import { 
   ActivityIndicator,
   ScrollView,
   StatusBar,
@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import {
+import { 
   Button,
   Divider,
   IconButton,
@@ -43,7 +43,7 @@ const SettingsScreen = () => {
       router.replace('/login');
     }
   }, [isAuthenticated]);
-  
+
   const handleThemeChange = (newTheme) => {
     console.log('切换主题为:', newTheme);
     setTheme(newTheme);
@@ -71,22 +71,22 @@ const SettingsScreen = () => {
   return (
     <PaperProvider theme={{ colors: theme }}>
       <View style={dynamicStyles.container}>
-        <StatusBar 
-          translucent 
-          backgroundColor="transparent" 
+      <StatusBar 
+        translucent 
+        backgroundColor="transparent" 
           barStyle={getStatusBarStyle()} 
-        />
+      />
         <SafeAreaView style={dynamicStyles.safeArea}>
           <View style={dynamicStyles.header}>
-            <IconButton
-              icon="arrow-left"
-              size={24}
+          <IconButton
+            icon="arrow-left"
+            size={24}
               onPress={() => router.push('/qa')}
-              iconColor={theme.text}
-            />
+            iconColor={theme.text}
+          />
             <Text style={dynamicStyles.headerTitle}>设置</Text>
-            <View style={{ width: 40 }} />
-          </View>
+          <View style={{ width: 40 }} />
+        </View>
 
           <ScrollView 
             style={dynamicStyles.content}
@@ -138,7 +138,7 @@ const SettingsScreen = () => {
                   <Text style={dynamicStyles.itemDescription}>简体中文</Text>
                 </View>
               </View>
-              
+
               <Divider style={dynamicStyles.divider} />
 
               <TouchableOpacity
@@ -156,7 +156,7 @@ const SettingsScreen = () => {
                       : themeType === ThemeType.DARK 
                         ? '深色（黑色）' 
                         : '随系统'}
-                  </Text>
+            </Text>
                 </View>
                 <List.Icon icon="chevron-right" color={theme.icon} />
               </TouchableOpacity>
@@ -218,7 +218,7 @@ const SettingsScreen = () => {
 
             {/* 底部安全间距 */}
             <View style={dynamicStyles.safeBottom} />
-          </ScrollView>
+        </ScrollView>
           
           {/* 主题选择模态框 */}
           <Portal>
@@ -282,8 +282,8 @@ const SettingsScreen = () => {
               </TouchableOpacity>
             </Modal>
           </Portal>
-        </SafeAreaView>
-      </View>
+      </SafeAreaView>
+    </View>
     </PaperProvider>
   );
 };
@@ -362,7 +362,7 @@ const createStyles = (theme) => StyleSheet.create({
     shadowOffset: {
       width: 0,
       height: 2,
-    },
+  },
     shadowOpacity: 0.25,
     shadowRadius: 4,
     elevation: 5,

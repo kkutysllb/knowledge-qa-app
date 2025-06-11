@@ -2,18 +2,18 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
-  Dimensions,
-  TextInput as RNTextInput,
-  StatusBar,
-  StyleSheet,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Dimensions,
+    TextInput as RNTextInput,
+    StatusBar,
+    StyleSheet,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import {
-  Checkbox,
-  Snackbar,
-  Text
+    Checkbox,
+    Snackbar,
+    Text
 } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Logo from '../src/assets/logo';
@@ -138,10 +138,10 @@ const LoginScreen = () => {
             />
             <View style={dynamicStyles.passwordInputContainer}>
               <RNTextInput
-                placeholder="密码"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={secureTextEntry}
+              placeholder="密码"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={secureTextEntry}
                 style={dynamicStyles.input}
                 placeholderTextColor={theme.placeholderText}
                 color={theme.text}
@@ -149,7 +149,7 @@ const LoginScreen = () => {
               />
               <TouchableOpacity 
                 style={dynamicStyles.eyeIconContainer} 
-                onPress={toggleSecureEntry}
+                  onPress={toggleSecureEntry}
                 disabled={loading}
               >
                 <Ionicons 

@@ -13,7 +13,7 @@ export const createTheme = (isDark = false) => {
     // 提供一个基本的默认主题，避免错误
     return {
       dark: isDark,
-      colors: {
+  colors: {
         primary: themeColors.primary || '#3F51B5',
         onPrimary: themeColors.buttonText || '#FFFFFF',
         primaryContainer: isDark ? '#3F51B5' : '#E8EAF6',
@@ -84,8 +84,8 @@ export const createTheme = (isDark = false) => {
         level4: isDark ? '#272727' : '#E0E0E0',
         level5: isDark ? '#2A2A2A' : '#D6D6D6',
       }
-    },
-  };
+  },
+};
 };
 
 // 默认导出浅色主题（为了向后兼容）
