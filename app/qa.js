@@ -37,7 +37,7 @@ import WebView from 'react-native-webview';
 import { useAuth } from '../src/context/AuthContext';
 import { useChat } from '../src/context/ChatContext';
 import { ThemeType, useTheme } from '../src/context/ThemeContext';
-import { pickDocument, pickImage } from '../src/utils/api';
+import { pickDocument, pickImage, sendKnowledgeFeedback } from '../src/utils/api';
 
 const { width, height } = Dimensions.get('window');
 
@@ -82,44 +82,57 @@ const safebtoa = (input) => {
 
 // 移除模拟聊天历史和初始消息
 
-const QAScreen = () => {
-  const [inputText, setInputText] = useState('');
-  const { theme, themeType, currentThemeType, getStatusBarStyle } = useTheme();
+const QA = () => {
   const scrollViewRef = useRef(null);
+  const router = useRouter();
+  const { darkMode, theme, toggleTheme } = useTheme();
+  const { 
+    messages, 
+    loading, 
+    error, 
+    setError,
+    sendMessage, 
+    currentConversationId, 
+    clearChat,
+    handleMessageFeedback,
+    knowledgeBases,
+    selectedKnowledgeBase,
+    models,
+    selectedModel,
+    conversations,
+    loadConversations,
+    selectConversation,
+    createNewConversation,
+    testDeleteAPI,
+    isStreaming,
+    setIsStreaming,
+    useKnowledgeBase,
+    setUseKnowledgeBase,
+    currentAttachment,
+    setAttachment,
+    removeAttachment,
+    isProcessingAttachment,
+    streamingContent
+  } = useChat();
+  const [inputText, setInputText] = useState('');
+  const [sending, setSending] = useState(false);
+  const [isMermaidVisible, setIsMermaidVisible] = useState(false);
+  const [currentMermaidContent, setCurrentMermaidContent] = useState('');
+  const [feedbackModalVisible, setFeedbackModalVisible] = useState(false);
+  const [feedbackText, setFeedbackText] = useState('');
+  const [currentFeedbackMessageId, setCurrentFeedbackMessageId] = useState(null);
+  const [messageFeedback, setMessageFeedback] = useState({});
+  const [menuVisible, setMenuVisible] = useState(false);
+  const { theme: themeContext, themeType, currentThemeType, getStatusBarStyle } = useTheme();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isModelMenuVisible, setIsModelMenuVisible] = useState(false);
   const [isKbMenuVisible, setIsKbMenuVisible] = useState(false);
   const drawerAnim = useRef(new Animated.Value(-300)).current;
-  const router = useRouter();
+  const [isAttachmentMenuVisible, setIsAttachmentMenuVisible] = useState(false);
   
   // 获取认证和聊天上下文
   const { isAuthenticated, user, logout } = useAuth();
-  const {
-    messages,
-    conversations,
-    loading,
-    currentConversationId,
-    error,
-    sendMessage,
-    loadConversations,
-    selectConversation,
-    isStreaming,
-    streamingContent,
-    createNewConversation,
-    deleteConversationById,
-    testDeleteAPI,
-    selectedModel,
-    setSelectedModel,
-    useKnowledgeBase,
-    setUseKnowledgeBase,
-    selectedKnowledgeBase,
-    setSelectedKnowledgeBase,
-    currentAttachment,
-    setAttachment,
-    removeAttachment,
-    isProcessingAttachment
-  } = useChat();
   
   // 判断是否是深色模式
   const isDark = currentThemeType === ThemeType.DARK;
@@ -127,15 +140,6 @@ const QAScreen = () => {
   // 创建动态样式
   const styles = useMemo(() => createStyles(theme, isDark), [theme, isDark]);
   
-  // 消息反馈状态
-  const [messageFeedback, setMessageFeedback] = useState({});
-  
-  // 添加更多状态变量
-  const [feedbackModalVisible, setFeedbackModalVisible] = useState(false);
-  const [feedbackText, setFeedbackText] = useState('');
-  const [currentFeedbackMessageId, setCurrentFeedbackMessageId] = useState(null);
-  const [isAttachmentMenuVisible, setIsAttachmentMenuVisible] = useState(false);
-
   // 抽屉动画
   useEffect(() => {
     Animated.timing(drawerAnim, {
@@ -156,21 +160,27 @@ const QAScreen = () => {
 
   // 检查认证状态
   useEffect(() => {
-    if (!isAuthenticated) {
-      router.replace('/login');
-    } else {
-      // 如果已认证，检查令牌并加载历史对话列表
-      AsyncStorage.getItem('token').then(token => {
-        if (token) {
-          console.log('已找到认证令牌，加载会话列表');
-          loadConversations();
-        } else {
-          console.error('未找到有效的认证令牌');
-          Alert.alert('登录已过期', '请重新登录以继续使用');
-          logout();
-        }
-      });
-    }
+    // 使用setTimeout确保组件已经挂载
+    const timer = setTimeout(() => {
+      if (!isAuthenticated) {
+        console.log('未认证，准备跳转到登录页');
+        router.replace('/login');
+      } else {
+        // 如果已认证，检查令牌并加载历史对话列表
+        AsyncStorage.getItem('token').then(token => {
+          if (token) {
+            console.log('已找到认证令牌，加载会话列表');
+            loadConversations();
+          } else {
+            console.error('未找到有效的认证令牌');
+            Alert.alert('登录已过期', '请重新登录以继续使用');
+            logout();
+          }
+        });
+      }
+    }, 100); // 短暂延迟，确保组件已挂载
+    
+    return () => clearTimeout(timer);
   }, [isAuthenticated]);
   
   // 滚动到底部
@@ -184,12 +194,6 @@ const QAScreen = () => {
 
   const toggleDrawer = () => {
     setIsDrawerOpen(!isDrawerOpen);
-  };
-
-  const toggleTts = () => {
-    const newStreamingState = !isStreaming;
-    setIsStreaming(newStreamingState);
-    console.log(`流式响应 ${newStreamingState ? '启用' : '禁用'}`);
   };
 
   const handleNewChat = () => {
@@ -216,19 +220,19 @@ const QAScreen = () => {
 
   // 复制消息内容
   const copyMessageContent = async (content) => {
-    await Clipboard.setStringAsync(content);
-    Alert.alert('复制成功', '已复制到剪贴板');
+    try {
+      await Clipboard.setStringAsync(content);
+      // 显示成功提示
+      Alert.alert('复制成功', '内容已复制到剪贴板');
+    } catch (error) {
+      console.error('复制失败:', error);
+      Alert.alert('复制失败', '无法复制内容到剪贴板');
+    }
   };
 
   // 处理点赞/点踩
   const handleFeedback = (messageId, feedbackType) => {
-    if (feedbackType === 'dislike') {
-      // 点踩时，打开反馈对话框
-      setCurrentFeedbackMessageId(messageId);
-      setFeedbackModalVisible(true);
-      return;
-    }
-    
+    // 更新本地反馈状态，立即提供视觉反馈
     setMessageFeedback(prev => {
       // 如果已经选择了相同的反馈，则取消选择
       if (prev[messageId] === feedbackType) {
@@ -239,6 +243,19 @@ const QAScreen = () => {
       // 否则设置新的反馈
       return {...prev, [messageId]: feedbackType};
     });
+    
+    // 对于点踩操作，显示反馈对话框
+    if (feedbackType === 'dislike') {
+      setCurrentFeedbackMessageId(messageId);
+      setFeedbackModalVisible(true);
+      return;
+    }
+    
+    // 对于点赞操作，直接处理反馈
+    if (feedbackType === 'like') {
+      // 使用ChatContext的handleMessageFeedback函数
+      handleMessageFeedback(messageId, feedbackType);
+    }
   };
 
   const submitFeedback = () => {
@@ -253,7 +270,43 @@ const QAScreen = () => {
         }
       }));
       
-      // TODO: 将反馈发送到服务器
+      // 更新知识库
+      // 获取当前反馈消息内容
+      const assistantMessage = messages.find(msg => msg.id === currentFeedbackMessageId);
+      if (!assistantMessage) {
+        console.error('缺少当前反馈消息ID');
+        return;
+      }
+      
+      const userMessage = findUserQuestionForAssistantMessage(currentFeedbackMessageId);
+      if (!userMessage) {
+        console.error('无法找到相关用户问题');
+        return;
+      }
+      
+      // 发送知识库反馈
+      (async () => {
+        try {
+          Alert.alert('正在更新知识库...', '请稍候');
+          
+          const result = await sendKnowledgeFeedback(
+            userMessage.content,
+            assistantMessage.content,
+            'incorrect',
+            feedbackText.trim(),
+            selectedKnowledgeBase
+          );
+          
+          if (result && result.success) {
+            Alert.alert('成功', '知识库更新成功');
+          } else {
+            Alert.alert('失败', `知识库更新失败: ${result?.message || '未知错误'}`);
+          }
+        } catch (error) {
+          console.error('更新知识库出错:', error);
+          Alert.alert('失败', '知识库更新失败，请检查网络连接');
+        }
+      })();
       
       // 关闭对话框
       setFeedbackModalVisible(false);
@@ -395,303 +448,288 @@ const QAScreen = () => {
     return processedContent;
   };
 
-  // 渲染单条消息
-  const renderMessage = (message) => {
-    const isUser = message.type === 'user' || message.role === 'user';
-    const isSystem = message.type === 'system' || message.role === 'system';
-    const isError = message.isError;
-    const isBot = message.type === 'bot' || message.role === 'assistant';
-    const isLoading = isBot && message.loading;
-    const hasThinking = isBot && message.thinking && message.thinking.trim().length > 0;
-    const hasCitations = isBot && message.citations && message.citations.length > 0;
-    
-    // 获取该消息的反馈状态
-    const feedback = messageFeedback[message.id];
-
-    // 安全获取主题颜色
-    const primaryColor = theme?.primary || '#6200ee';
-    
-    // 系统消息使用特殊样式 - 但不显示系统设定类消息
-    if (isSystem) {
-      // 如果包含"欢迎使用5G核心网"等系统设定内容，则不显示
-      if (message.content && (
-        message.content.includes("欢迎使用5G核心网") || 
-        message.content.includes("智擎") ||
-        message.content.includes("我是您的智能助手")
-      )) {
-        return null;
+  // 添加一个独立的消息组件
+  const ChatMessage = React.memo(({ message, feedback, onCopy, onFeedback, theme, isDark, isStreaming, streamingContent }) => {
+    const renderMessage = () => {
+      const isUser = message.type === 'user' || message.role === 'user';
+      const isSystem = message.type === 'system' || message.role === 'system';
+      const isError = message.isError;
+      const isBot = message.type === 'bot' || message.role === 'assistant';
+      const isLoading = isBot && message.loading;
+      const hasThinking = isBot && message.thinking && message.thinking.trim().length > 0;
+      const hasCitations = isBot && message.citations && message.citations.length > 0;
+      
+      // 确保消息内容是字符串
+      const safeContent = typeof message.content === 'string' 
+        ? message.content 
+        : (message.content ? String(message.content) : '');
+      const messageContent = safeContent;
+      
+      // 安全获取主题颜色
+      const primaryColor = theme?.primary || '#6200ee';
+      
+      // 系统消息使用特殊样式 - 但不显示系统设定类消息
+      if (isSystem) {
+        // 如果包含"欢迎使用5G核心网"等系统设定内容，则不显示
+        if (messageContent && (
+          messageContent.includes("欢迎使用5G核心网") || 
+          messageContent.includes("智擎") ||
+          messageContent.includes("我是您的智能助手")
+        )) {
+          return null;
+        }
+        
+        return (
+          <Surface 
+            style={[
+              styles.systemMessageContainer,
+              isError ? { backgroundColor: isDark ? 'rgba(255,0,0,0.1)' : 'rgba(255,0,0,0.05)' } : null
+            ]}
+          >
+            <Text style={styles.systemMessageText}>{messageContent}</Text>
+          </Surface>
+        );
       }
       
-      return (
-        <Surface 
-          key={message.id}
-          style={[
-            styles.systemMessageContainer,
-            isError ? { backgroundColor: isDark ? 'rgba(255,0,0,0.1)' : 'rgba(255,0,0,0.05)' } : null
-          ]}
-        >
-          <Text style={styles.systemMessageText}>{message.content}</Text>
-        </Surface>
-      );
-    }
-    
-    // 检查是否应该渲染图表
-    // 当消息正在加载(isLoading)或者是流式响应(isStreaming)但不是当前消息时，不渲染图表
-    const shouldRenderMermaid = !(isLoading || (isBot && isStreaming && !message.id.includes('streaming')));
-    
-    // 清理消息内容，移除<think>标签
-    let cleanedContent = isBot ? 
-      cleanMessageContent(message.content, isStreaming ? streamingContent : '') : 
-      message.content;
+      // 这个消息是否应该使用流式内容 (只有正在loading的bot消息才使用流式内容)
+      const shouldUseStreamingContent = isBot && isLoading && isStreaming;
       
-    // 处理长指令格式，将其转换为内联代码块
-    cleanedContent = wrapLongCommands(cleanedContent);
-    
-    // 查找mermaid代码块
-    const mermaidBlocks = (isBot && shouldRenderMermaid) ? findMermaidBlocks(cleanedContent) : [];
-    
-    // 替换mermaid代码块为占位符
-    let contentWithPlaceholders = cleanedContent;
-    const mermaidPlaceholders = [];
-    
-    mermaidBlocks.forEach((block, index) => {
-      const placeholder = `[MERMAID_DIAGRAM_${index}]`;
-      contentWithPlaceholders = contentWithPlaceholders.replace(block.fullMatch, placeholder);
-      mermaidPlaceholders.push(placeholder);
-    });
-    
-    // 分割内容，处理mermaid图表
-    const contentParts = [];
-    
-    if (contentWithPlaceholders) {
-      let lastIndex = 0;
+      // 检查是否应该渲染图表
+      const shouldRenderMermaid = !(isLoading || (isBot && isStreaming && !message.id.includes('streaming')));
       
-      mermaidPlaceholders.forEach((placeholder, index) => {
-        const placeholderIndex = contentWithPlaceholders.indexOf(placeholder, lastIndex);
+      // 清理消息内容，移除<think>标签
+      let cleanedContent = isBot ? 
+        cleanMessageContent(messageContent, shouldUseStreamingContent ? streamingContent : '') : 
+        messageContent;
         
-        if (placeholderIndex > lastIndex) {
-          // 添加占位符前的文本
-          contentParts.push({
-            type: 'text',
-            content: contentWithPlaceholders.substring(lastIndex, placeholderIndex)
-          });
-        }
-        
-        if (shouldRenderMermaid) {
-          // 添加mermaid图表
-          contentParts.push({
-            type: 'mermaid',
-            content: mermaidBlocks[index].code,
-            key: `mermaid-${message.id}-${index}`
-          });
-        } else {
-          // 在流式响应或加载时，不渲染图表，而是显示代码块
-          contentParts.push({
-            type: 'text',
-            content: '\n```\n' + mermaidBlocks[index].code + '\n```\n'
-          });
-        }
-        
-        lastIndex = placeholderIndex + placeholder.length;
+      // 处理长指令格式，将其转换为内联代码块
+      cleanedContent = wrapLongCommands(cleanedContent);
+      
+      // 查找mermaid代码块
+      const mermaidBlocks = (isBot && shouldRenderMermaid) ? findMermaidBlocks(cleanedContent) : [];
+      
+      // 替换mermaid代码块为占位符
+      let contentWithPlaceholders = cleanedContent;
+      const mermaidPlaceholders = [];
+      
+      mermaidBlocks.forEach((block, index) => {
+        const placeholder = `[MERMAID_DIAGRAM_${index}]`;
+        contentWithPlaceholders = contentWithPlaceholders.replace(block.fullMatch, placeholder);
+        mermaidPlaceholders.push(placeholder);
       });
       
-      // 添加最后一部分文本
-      if (lastIndex < contentWithPlaceholders.length) {
+      // 分割内容，处理mermaid图表
+      const contentParts = [];
+      
+      if (contentWithPlaceholders) {
+        let lastIndex = 0;
+        
+        mermaidPlaceholders.forEach((placeholder, index) => {
+          const placeholderIndex = contentWithPlaceholders.indexOf(placeholder, lastIndex);
+          
+          if (placeholderIndex > lastIndex) {
+            // 添加占位符前的文本
+            contentParts.push({
+              type: 'text',
+              content: contentWithPlaceholders.substring(lastIndex, placeholderIndex)
+            });
+          }
+          
+          if (shouldRenderMermaid) {
+            // 添加mermaid图表
+            contentParts.push({
+              type: 'mermaid',
+              content: mermaidBlocks[index].code,
+              key: `mermaid-${message.id}-${index}`
+            });
+          } else {
+            // 在流式响应或加载时，不渲染图表，而是显示代码块
+            contentParts.push({
+              type: 'text',
+              content: '\n```\n' + mermaidBlocks[index].code + '\n```\n'
+            });
+          }
+          
+          lastIndex = placeholderIndex + placeholder.length;
+        });
+        
+        // 添加最后一部分文本
+        if (lastIndex < contentWithPlaceholders.length) {
+          contentParts.push({
+            type: 'text',
+            content: contentWithPlaceholders.substring(lastIndex)
+          });
+        }
+      }
+      
+      // 如果没有分割部分，添加整个内容
+      if (contentParts.length === 0 && contentWithPlaceholders) {
         contentParts.push({
           type: 'text',
-          content: contentWithPlaceholders.substring(lastIndex)
+          content: contentWithPlaceholders
         });
       }
-    }
-    
-    // 如果没有分割部分，添加整个内容
-    if (contentParts.length === 0 && contentWithPlaceholders) {
-      contentParts.push({
-        type: 'text',
-        content: contentWithPlaceholders
-      });
-    }
 
-    return (
-      <View
-        key={message.id}
-        style={[
-          styles.messageRow,
-          isUser ? styles.userMessageRow : styles.botMessageRow,
-        ]}
-      >
-        {/* 图标区分用户和AI，沉浸式风格 */}
-        <View style={styles.iconContainer}>
-          {isUser ? (
-            <Icon name="account" size={24} color={theme.accent || '#03dac6'} />
-          ) : (
-            <Icon name="robot" size={24} color={theme.primary || '#6200ee'} />
-          )}
-        </View>
-        
-        <View style={styles.messageContainer}>
-          {/* 消息内容 */}
-          <View style={styles.messageContent}>
-            {isLoading ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator color={primaryColor} size="small" />
-                <Text style={{ color: theme.textSecondary, marginTop: 8 }}>思考中...</Text>
-              </View>
+      return (
+        <View
+          style={[
+            styles.messageRow,
+            isUser ? styles.userMessageRow : styles.botMessageRow,
+          ]}
+        >
+          {/* 图标区分用户和AI，沉浸式风格 */}
+          <View style={styles.iconContainer}>
+            {isUser ? (
+              <Icon name="account" size={24} color={theme.accent || '#03dac6'} />
             ) : (
-              // 渲染消息内容（包括文本和mermaid图表）
-              <View>
-                {contentParts.map((part, index) => {
-                  if (part.type === 'text') {
-                    return (
-                      <Markdown 
-                        key={`text-${index}`}
-                        style={{
-                          body: styles.messageText,
-                          // 设置其他Markdown样式
-                          heading1: { fontSize: 22, fontWeight: 'bold', marginVertical: 12, borderBottomWidth: 1, borderBottomColor: theme.divider, paddingBottom: 8 },
-                          heading2: { fontSize: 20, fontWeight: 'bold', marginVertical: 10 },
-                          heading3: { fontSize: 18, fontWeight: 'bold', marginVertical: 8 },
-                          link: { color: theme.primary, textDecorationLine: 'underline' },
-                          blockquote: { borderLeftWidth: 4, borderLeftColor: theme.border, paddingLeft: 12, opacity: 0.8, marginVertical: 10 },
-                          code_block: { 
-                            backgroundColor: isDark ? '#2c3e50' : 'rgba(0,0,0,0.05)', 
-                            padding: 12, 
-                            borderRadius: 4, 
-                            marginVertical: 10, 
-                            fontFamily: 'monospace', 
-                            fontSize: 16, 
-                            lineHeight: 24,
-                            color: isDark ? '#ffffff' : undefined,
-                            borderWidth: isDark ? 2 : 0,
-                            borderColor: '#4fc3f7',
-                            fontWeight: isDark ? 'bold' : 'normal'
-                          },
-                          code_inline: { 
-                            backgroundColor: isDark ? '#2c3e50' : 'rgba(0,0,0,0.1)', 
-                            paddingHorizontal: 6, 
-                            paddingVertical: 3, 
-                            borderRadius: 3, 
-                            fontFamily: 'monospace',
-                            fontSize: 15,
-                            flexShrink: 1,
-                            flexWrap: 'wrap',
-                            wordBreak: 'break-word',
-                            color: isDark ? '#ffffff' : undefined,
-                            borderWidth: isDark ? 1 : 0,
-                            borderColor: '#4fc3f7',
-                            fontWeight: isDark ? 'bold' : 'normal'
-                          },
-                          table: { borderWidth: 1, borderColor: theme.border, marginVertical: 12, width: '100%' },
-                          tr: { borderBottomWidth: 1, borderColor: theme.border },
-                          th: { padding: 8, fontWeight: 'bold', backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' },
-                          td: { padding: 8 },
-                          hr: { backgroundColor: theme.divider, height: 1, marginVertical: 16 },
-                          bullet_list: { marginVertical: 10 },
-                          ordered_list: { marginVertical: 10 },
-                          paragraph: { flexDirection: 'row', flexWrap: 'wrap' }
-                        }}
-                      >
-                        {part.content}
-                      </Markdown>
-                    );
-                  } else if (part.type === 'mermaid') {
-                    // 使用单独的组件来渲染mermaid图表
-                    return <MermaidChart key={part.key} code={part.content} theme={theme} isDark={isDark} />;
-                  }
-                  return null;
-                })}
-              </View>
+              <Icon name="robot" size={24} color={theme.primary || '#6200ee'} />
             )}
           </View>
           
-          {/* 附件信息 */}
-          {message.hasAttachment && (
-            <View style={styles.attachmentContainer}>
-              <View style={styles.attachmentContent}>
-                <Icon name="file-document-outline" size={20} color={theme.primary} />
-                <Text style={styles.attachmentName}>{message.attachmentName}</Text>
-              </View>
-            </View>
-          )}
-          
-          {/* 思考过程展示 - 直接展示 */}
-          {hasThinking && (
-            <View style={styles.thinkingContainerOuter}>
-              <View style={styles.thinkingHeader}>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Icon name="flash" size={20} color={primaryColor} style={{ marginRight: 8 }} />
-                  <Text style={[styles.thinkingTitle, { color: primaryColor }]}>
-                    思考过程
-                  </Text>
+          <View style={styles.messageContainer}>
+            {/* 消息内容 */}
+            <View style={styles.messageContent}>
+              {isLoading ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator color={primaryColor} size="small" />
+                  <Text style={{ color: theme.textSecondary, marginTop: 8 }}>思考中...</Text>
                 </View>
-              </View>
-              
-              <View style={styles.thinkingContentContainer}>
-                <Text style={styles.thinkingContent}>
-                  {message.thinking}
-                </Text>
-              </View>
+              ) : (
+                // 渲染消息内容（包括文本和mermaid图表）
+                <View>
+                  {contentParts.map((part, index) => {
+                    if (part.type === 'text') {
+                      return (
+                        <Markdown 
+                          key={`text-${index}`}
+                          style={{
+                            body: styles.messageText,
+                            // 设置其他Markdown样式
+                            heading1: { fontSize: 22, fontWeight: 'bold', marginVertical: 12, borderBottomWidth: 1, borderBottomColor: theme.divider, paddingBottom: 8 },
+                            heading2: { fontSize: 20, fontWeight: 'bold', marginVertical: 10 },
+                            heading3: { fontSize: 18, fontWeight: 'bold', marginVertical: 8 },
+                            link: { color: theme.primary, textDecorationLine: 'underline' },
+                            blockquote: { borderLeftWidth: 4, borderLeftColor: theme.border, paddingLeft: 12, opacity: 0.8, marginVertical: 10 },
+                            code_block: { 
+                              backgroundColor: isDark ? '#2c3e50' : 'rgba(0,0,0,0.05)', 
+                              padding: 12, 
+                              borderRadius: 4, 
+                              marginVertical: 10, 
+                              fontFamily: 'monospace', 
+                              fontSize: 16, 
+                              lineHeight: 24,
+                              color: isDark ? '#ffffff' : undefined,
+                              borderWidth: isDark ? 2 : 0,
+                              borderColor: '#4fc3f7',
+                              fontWeight: isDark ? 'bold' : 'normal'
+                            },
+                            code_inline: { 
+                              backgroundColor: isDark ? '#2c3e50' : 'rgba(0,0,0,0.1)', 
+                              paddingHorizontal: 6, 
+                              paddingVertical: 3, 
+                              borderRadius: 3, 
+                              fontFamily: 'monospace',
+                              fontSize: 15,
+                              flexShrink: 1,
+                              flexWrap: 'wrap',
+                              wordBreak: 'break-word',
+                              color: isDark ? '#ffffff' : undefined,
+                              borderWidth: isDark ? 1 : 0,
+                              borderColor: '#4fc3f7',
+                              fontWeight: isDark ? 'bold' : 'normal'
+                            },
+                            table: { borderWidth: 1, borderColor: theme.border, marginVertical: 12, width: '100%' },
+                            tr: { borderBottomWidth: 1, borderColor: theme.border },
+                            th: { padding: 8, fontWeight: 'bold', backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' },
+                            td: { padding: 8 },
+                            hr: { backgroundColor: theme.divider, height: 1, marginVertical: 16 },
+                            bullet_list: { marginVertical: 10 },
+                            ordered_list: { marginVertical: 10 },
+                          }}
+                        >
+                          {part.content}
+                        </Markdown>
+                      );
+                    } else if (part.type === 'mermaid') {
+                      // 渲染mermaid图表
+                      return (
+                        <MermaidChart 
+                          key={part.key} 
+                          code={part.content} 
+                          theme={theme}
+                          isDark={isDark}
+                        />
+                      );
+                    }
+                    return null;
+                  })}
+                </View>
+              )}
             </View>
-          )}
-          
-          {/* 引用信息展示 - 优化样式 */}
-          {hasCitations && (
-            <Card style={styles.citationsContainer}>
-              <Card.Title
-                title="引用来源"
-                left={(props) => <Icon name="link-variant" size={24} color={primaryColor} />}
-                titleStyle={styles.citationsTitle}
-              />
-              <Card.Content>
-                {message.citations.map((citation, index) => (
-                  <View key={index} style={styles.citationItem}>
-                    <Text style={styles.citationNumber}>[{index + 1}]</Text>
-                    <Text style={styles.citationContent}>
-                      {citation.title || citation.content || '未知来源'}
+            
+            {isBot && !isLoading && (
+              <View style={styles.messageActions}>
+                {/* 用户反馈（点赞/点踩）*/}
+                <View style={styles.feedbackContainer}>
+                  <IconButton
+                    icon="thumb-up"
+                    size={20}
+                    iconColor={feedback === 'like' ? theme.success : theme.iconInactive}
+                    onPress={() => onFeedback(message.id, 'like')}
+                    style={styles.feedbackButton}
+                  />
+                  <IconButton
+                    icon="thumb-down"
+                    size={20}
+                    iconColor={feedback === 'dislike' ? theme.error : theme.iconInactive}
+                    onPress={() => onFeedback(message.id, 'dislike')}
+                    style={styles.feedbackButton}
+                  />
+                  <IconButton
+                    icon="content-copy"
+                    size={20}
+                    iconColor={theme.iconInactive}
+                    onPress={() => onCopy(messageContent)}
+                    style={styles.feedbackButton}
+                  />
+                  {hasThinking && (
+                    <IconButton
+                      icon="thought-bubble"
+                      size={20}
+                      iconColor={theme.iconInactive}
+                      onPress={() => onCopy(messageContent, message.thinking)}
+                      style={styles.feedbackButton}
+                    />
+                  )}
+                </View>
+                
+                {/* 引用来源 */}
+                {hasCitations && (
+                  <View style={styles.citationsContainer}>
+                    <Text style={[styles.citationTitle, { color: theme.textSecondary }]}>
+                      引用来源:
                     </Text>
+                    {message.citations.map((citation, idx) => (
+                      <Text 
+                        key={`cite-${idx}`} 
+                        style={[styles.citation, { color: theme.textTertiary }]}
+                        numberOfLines={1}
+                        ellipsizeMode="middle"
+                      >
+                        {idx + 1}. {citation.title || citation.url || '未知来源'}
+                      </Text>
+                    ))}
                   </View>
-                ))}
-              </Card.Content>
-            </Card>
-          )}
-          
-          {/* 消息操作按钮 */}
-          {!isUser && !isLoading && cleanedContent && (
-            <View style={styles.messageActions}>
-              <IconButton
-                icon="thumb-up"
-                size={18}
-                iconColor={feedback === 'like' ? primaryColor : theme.textSecondary}
-                style={styles.actionButton}
-                onPress={() => handleFeedback(message.id, 'like')}
-              />
-              <IconButton
-                icon="thumb-down"
-                size={18}
-                iconColor={feedback === 'dislike' ? theme.error : theme.textSecondary}
-                style={styles.actionButton}
-                onPress={() => handleFeedback(message.id, 'dislike')}
-              />
-              <IconButton
-                icon="content-copy"
-                size={18}
-                iconColor={theme.textSecondary}
-                style={styles.actionButton}
-                onPress={() => copyMessageContent(cleanedContent)}
-              />
-              <IconButton
-                icon="reload"
-                size={18}
-                iconColor={theme.textSecondary}
-                style={styles.actionButton}
-                onPress={() => regenerateAnswer(message.content)}
-              />
-            </View>
-          )}
+                )}
+              </View>
+            )}
+          </View>
         </View>
-      </View>
-    );
-  };
+      );
+    };
+
+    return renderMessage();
+  });
 
   // 单独的MermaidChart组件，使用WebView本地渲染而不是外部服务
   const MermaidChart = ({ code, theme, isDark }) => {
@@ -1070,6 +1108,20 @@ ${cleanedCode}
     ].filter(group => group.data.length > 0); // 只保留有数据的分组
   };
 
+  // 查找AI消息对应的用户问题
+  const findUserQuestionForAssistantMessage = (assistantMessageId) => {
+    const messageIndex = messages.findIndex(msg => msg.id === assistantMessageId);
+    if (messageIndex <= 0) return null;
+    
+    // 向前查找最近的一条用户消息
+    for (let i = messageIndex - 1; i >= 0; i--) {
+      if (messages[i].role === 'user' || messages[i].type === 'user') {
+        return messages[i];
+      }
+    }
+    return null;
+  };
+
   return (
     <LinearGradient
       colors={getGradientColors()}
@@ -1204,16 +1256,10 @@ ${cleanedCode}
             iconColor={theme.icon}
             onPress={toggleDrawer}
           />
-          <Text style={[styles.headerTitle, { color: theme.text }]}>
+          <Text style={styles.headerTitle}>
             新对话
           </Text>
           <View style={styles.headerRightContainer}>
-            <IconButton
-              icon={isStreaming ? "volume-high" : "volume-off"}
-              size={24}
-              iconColor={isStreaming ? theme.success : theme.icon}
-              onPress={toggleTts}
-            />
             <IconButton
               icon="plus"
               size={24}
@@ -1233,11 +1279,23 @@ ${cleanedCode}
           {messages.length <= 1 ? (
             renderWelcomeScreen()
           ) : (
-        <ScrollView
-          ref={scrollViewRef}
-          contentContainerStyle={styles.messagesContent}
-        >
-              {messages.map(message => renderMessage(message))}
+            <ScrollView
+              ref={scrollViewRef}
+              contentContainerStyle={styles.messagesContent}
+            >
+              {messages.map(message => (
+                <ChatMessage
+                  key={message.id}
+                  message={message}
+                  feedback={messageFeedback[message.id]}
+                  onCopy={copyMessageContent}
+                  onFeedback={handleFeedback}
+                  theme={theme}
+                  isDark={isDark}
+                  isStreaming={isStreaming}
+                  streamingContent={streamingContent}
+                />
+              ))}
               
               {loading && !isStreaming && (
                 <View style={styles.loadingContainer}>
@@ -1245,7 +1303,7 @@ ${cleanedCode}
                   <Text style={{ color: theme.textSecondary, marginTop: 8 }}>思考中...</Text>
                 </View>
               )}
-        </ScrollView>
+            </ScrollView>
           )}
         </Animated.View>
 
@@ -1603,12 +1661,18 @@ const createStyles = (theme, isDark) => StyleSheet.create({
   },
   messageActions: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    paddingTop: 8,
+    marginTop: 8,
+    marginLeft: -4, // 抵消按钮内边距
+    opacity: 0.8, // 默认状态下稍微透明
   },
   actionButton: {
-    marginLeft: 8,
+    margin: 0,
+    padding: 8,
+    backgroundColor: 'transparent',
+  },
+  activeActionButton: {
+    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)',
+    borderRadius: 20,
   },
   systemMessageContainer: {
     padding: 12,
@@ -1857,6 +1921,23 @@ const createStyles = (theme, isDark) => StyleSheet.create({
     height: 1,
     backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
   },
+  feedbackContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  feedbackButton: {
+    margin: 0,
+    padding: 8,
+    backgroundColor: 'transparent',
+  },
+  citationTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  citation: {
+    fontSize: 14,
+  },
 });
 
-export default QAScreen;
+export default QA;

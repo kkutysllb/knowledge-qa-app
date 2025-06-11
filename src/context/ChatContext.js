@@ -9,6 +9,7 @@ import {
   getConversationMessages,
   getConversations,
   saveConversation,
+  sendKnowledgeFeedback,
   streamKnowledgeQA,
   streamKnowledgeQAWithFile
 } from '../utils/api';
@@ -53,6 +54,8 @@ export const ChatProvider = ({ children }) => {
   const [selectedModel, setSelectedModel] = useState('qa'); // 默认使用问答模型
   const [useKnowledgeBase, setUseKnowledgeBase] = useState(true); // 默认使用知识库
   const [selectedKnowledgeBase, setSelectedKnowledgeBase] = useState('default'); // 默认知识库
+  const [knowledgeBases, setKnowledgeBases] = useState(['default', '5gc', 'sdn', 'core_network']); // 可用知识库列表
+  const [models, setModels] = useState(['qa', 'chat', 'agent']); // 可用模型列表
   
   // 附件相关状态
   const [currentAttachment, setCurrentAttachment] = useState(null);
@@ -1066,6 +1069,46 @@ export const ChatProvider = ({ children }) => {
           await syncToServer(currentConv);
         }
       }
+
+      // 处理更新知识库逻辑
+      // 获取当前消息内容
+      const assistantMessage = messages.find(msg => msg.id === messageId);
+      if (!assistantMessage) return;
+      
+      // 查找对应的用户问题
+      // 向前查找最近的一条用户消息
+      const messageIndex = messages.findIndex(msg => msg.id === messageId);
+      let userMessage = null;
+      
+      if (messageIndex > 0) {
+        for (let i = messageIndex - 1; i >= 0; i--) {
+          if (messages[i].role === 'user' || messages[i].type === 'user') {
+            userMessage = messages[i];
+            break;
+          }
+        }
+      }
+      
+      if (!userMessage) return;
+      
+      // 更新知识库
+      if (feedback === 'like') {
+        // 点赞时直接更新知识库，标记为正确答案
+        const result = await sendKnowledgeFeedback(
+          userMessage.content,
+          assistantMessage.content,
+          'correct',
+          '',
+          selectedKnowledgeBase
+        );
+        
+        if (result && result.success) {
+          console.log('知识库更新成功');
+        } else {
+          console.error('知识库更新失败:', result?.message || '未知错误');
+        }
+      }
+      // 对于"dislike"反馈，会在用户提交具体反馈后在qa.js的submitFeedback中处理
     } catch (error) {
       console.error('更新消息反馈失败:', error);
       Alert.alert('错误', `更新消息反馈失败: ${error.message}`);
@@ -1093,40 +1136,43 @@ export const ChatProvider = ({ children }) => {
   return (
     <ChatContext.Provider
       value={{
-        // 会话和消息状态
         conversations,
         messages,
-        currentConversationId,
         loading,
         error,
+        setError,
         isStreaming,
         streamingContent,
+        currentConversationId,
         
-        // 模型和知识库设置
+        // 对话操作方法
+        loadConversations,
+        loadConversationMessages,
+        sendMessage,
+        createNewConversation,
+        selectConversation,
+        deleteConversationById,
+        testDeleteAPI,
+        regenerateAnswer,
+        handleMessageFeedback,
+        
+        // 设置相关
         selectedModel,
         setSelectedModel,
         useKnowledgeBase,
         setUseKnowledgeBase,
         selectedKnowledgeBase,
         setSelectedKnowledgeBase,
+        knowledgeBases,
+        setKnowledgeBases,
+        models,
+        setModels,
         
         // 附件相关
         currentAttachment,
         setAttachment,
-        removeAttachment: () => setCurrentAttachment(null),
-        isProcessingAttachment,
-        
-        // 操作函数
-        sendMessage,
-        loadConversations,
-        selectConversation,
-        createNewConversation,
-        deleteConversationById,
-        regenerateAnswer,
-        handleMessageFeedback,
-        
-        // 调试函数
-        testDeleteAPI,
+        removeAttachment,
+        isProcessingAttachment
       }}
     >
       {children}

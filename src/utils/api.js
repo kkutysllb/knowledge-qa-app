@@ -498,6 +498,63 @@ export const streamKnowledgeQAWithFile = async (
   }
 };
 
+/**
+ * 发送消息反馈（点赞/点踩）
+ * @param {string} messageId - 消息ID
+ * @param {string} feedback - 反馈类型，'like'或'dislike'
+ * @param {string} comment - 反馈评论（可选，主要用于点踩时）
+ * @returns {Promise<Object>} - 反馈响应
+ */
+export const sendMessageFeedback = async (messageId, feedback, comment = '') => {
+  try {
+    return await apiRequest('/api/chat-history/feedback', {
+      method: 'POST',
+      body: JSON.stringify({
+        message_id: messageId,
+        feedback_type: feedback,
+        comment: comment
+      })
+    });
+  } catch (error) {
+    console.error('发送消息反馈失败:', error);
+    throw error;
+  }
+};
+
+/**
+ * 更新知识库反馈
+ * @param {string} question - 用户问题
+ * @param {string} answer - AI回答
+ * @param {string} feedbackType - 反馈类型：'correct'或'incorrect'
+ * @param {string} correction - 当反馈为'incorrect'时的更正内容
+ * @param {string} knowledgeBaseId - 知识库ID
+ * @returns {Promise<Object>} - 反馈响应
+ */
+export const sendKnowledgeFeedback = async (
+  question,
+  answer,
+  feedbackType,
+  correction = '',
+  knowledgeBaseId = 'default'
+) => {
+  try {
+    return await apiRequest('/api/workflows/knowledge-base/feedback', {
+      method: 'POST',
+      body: JSON.stringify({
+        question,
+        answer,
+        feedback_type: feedbackType,
+        correction,
+        kb_name: knowledgeBaseId,
+        vector_store_type: "lancedb"
+      })
+    });
+  } catch (error) {
+    console.error('发送知识库反馈失败:', error);
+    throw new Error(`知识库反馈失败: ${error.message}`);
+  }
+};
+
 export default {
   login,
   getUserInfo,
@@ -511,4 +568,6 @@ export default {
   pickImage,
   knowledgeQAWithFile,
   streamKnowledgeQAWithFile,
+  sendMessageFeedback,
+  sendKnowledgeFeedback,
 }; 
