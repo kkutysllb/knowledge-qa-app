@@ -1,0 +1,20 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="30%" r="70%">
+      <stop offset="0%" style="stop-color:#4FC3F7"/>
+      <stop offset="60%" style="stop-color:#1976D2"/>
+      <stop offset="100%" style="stop-color:#0D47A1"/>
+    </radialGradient>
+  </defs>
+  
+  <!-- 背景 -->
+  <circle cx="256" cy="256" r="240.64" fill="url(#bg)"/>
+  
+  <!-- 主文字 -->
+  <text x="256" y="240.64" font-family="Arial, sans-serif" font-size="92.16" 
+        font-weight="bold" text-anchor="middle" fill="white">5GC</text>
+  
+  <!-- 副标题 -->
+  <text x="256" y="291.84" font-family="Arial, sans-serif" font-size="40.96" 
+        font-weight="500" text-anchor="middle" fill="#E3F2FD" opacity="0.9">智擎</text>
+</svg>

@@ -2,10 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
-import apiConfig from '../config/api.config';
-
-// 从配置文件中获取API基础URL
-const API_BASE_URL = apiConfig.API_BASE_URL;
+import { getApiBaseUrl } from '../config/api.config';
 
 /**
  * 加密密码函数 - 使用SHA-256哈希，生成64位小写十六进制字符串
@@ -49,41 +46,67 @@ export const apiRequest = async (endpoint, options = {}) => {
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     } else {
-      console.error('API请求缺少认证令牌');
+      console.log('API请求缺少认证令牌 - 可能是登录请求');
     }
     
-    // 构建完整URL
-    const url = `${API_BASE_URL}${endpoint}`;
-    console.log(`API请求: ${options.method || 'GET'} ${url}`);
+    // 构建完整URL - 使用动态API地址
+    const url = `${getApiBaseUrl()}${endpoint}`;
+    console.log(`🌐 API请求: ${options.method || 'GET'} ${url}`);
+    console.log(`📋 请求头:`, headers);
+    if (options.body) {
+      console.log(`📦 请求体:`, options.body);
+    }
     
     // 发送请求
     const response = await fetch(url, {
       ...options,
       headers,
+      timeout: 10000, // 10秒超时
     });
+    
+    console.log(`✅ 响应状态: ${response.status} ${response.statusText}`);
     
     // 检查响应状态
     if (!response.ok) {
       // 如果是401错误（未授权），清除令牌并提示用户重新登录
       if (response.status === 401) {
-        console.error('未授权访问，需要重新登录');
+        console.error('❌ 未授权访问，需要重新登录');
         await AsyncStorage.removeItem('token');
         throw new Error('登录已过期，请重新登录');
       }
       
-      throw new Error(`请求失败: ${response.status} ${response.statusText}`);
+      const errorText = await response.text();
+      console.error(`❌ 请求失败详情:`, errorText);
+      throw new Error(`请求失败: ${response.status} ${response.statusText}\n详情: ${errorText}`);
     }
     
     // 检查响应内容类型
     const contentType = response.headers.get('content-type');
     if (contentType && contentType.includes('application/json')) {
-      return await response.json();
+      const jsonResponse = await response.json();
+      console.log(`📄 JSON响应:`, jsonResponse);
+      return jsonResponse;
     }
     
-    return await response.text();
+    const textResponse = await response.text();
+    console.log(`📄 文本响应:`, textResponse);
+    return textResponse;
   } catch (error) {
-    console.error('API请求错误:', error);
-    throw error;
+    // 详细的错误分类
+    if (error.name === 'TypeError' && error.message.includes('Network request failed')) {
+      console.error('❌ 网络连接失败 - 可能原因:');
+      console.error('  1. 服务器不可达');
+      console.error('  2. HTTP请求被阻止（需要HTTPS）');
+      console.error('  3. 防火墙阻止连接');
+      console.error('  4. 手机网络问题');
+      throw new Error('网络连接失败，请检查网络设置和服务器状态');
+    } else if (error.name === 'AbortError') {
+      console.error('❌ 请求超时');
+      throw new Error('请求超时，请检查网络连接');
+    } else {
+      console.error('❌ API请求错误:', error);
+      throw error;
+    }
   }
 };
 
@@ -226,7 +249,7 @@ export const knowledgeQAWithFile = async (
     }
     
     // 构建URL
-    const url = `${API_BASE_URL}/api/workflows/knowledge-qa/upload`;
+    const url = `${getApiBaseUrl()}/api/workflows/knowledge-qa/upload`;
     
     console.log('发送文件上传请求:', {
       url,
@@ -408,7 +431,7 @@ export const deleteConversation = async (conversationId) => {
     }
     
     // 构建请求URL，确保格式正确
-    const url = `${API_BASE_URL}/api/chat-history/conversations/${conversationId}`;
+    const url = `${getApiBaseUrl()}/api/chat-history/conversations/${conversationId}`;
     
     console.log(`发送删除请求到: ${url}`);
     console.log(`使用的认证令牌: ${token.substring(0, 10)}...`);
@@ -484,7 +507,7 @@ export const streamKnowledgeQA = async (data, onChunk) => {
     // 设置流式数据
     data.stream = true;
     
-    const response = await fetch(`${API_BASE_URL}/api/workflows/knowledge-qa`, {
+    const response = await fetch(`${getApiBaseUrl()}/api/workflows/knowledge-qa`, {
       method: 'POST',
       headers,
       body: JSON.stringify(data),

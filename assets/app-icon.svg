@@ -1,0 +1,62 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- 主渐变 -->
+    <radialGradient id="mainGradient" cx="50%" cy="30%" r="70%">
+      <stop offset="0%" style="stop-color:#4FC3F7;stop-opacity:1" />
+      <stop offset="60%" style="stop-color:#1976D2;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0D47A1;stop-opacity:1" />
+    </radialGradient>
+    
+    <!-- 内部光晕 -->
+    <radialGradient id="glowGradient" cx="50%" cy="50%" r="45%">
+      <stop offset="0%" style="stop-color:#81D4FA;stop-opacity:0.3" />
+      <stop offset="100%" style="stop-color:#81D4FA;stop-opacity:0" />
+    </radialGradient>
+    
+    <!-- 文字阴影 -->
+    <filter id="textShadow">
+      <feDropShadow dx="2" dy="4" stdDeviation="3" flood-opacity="0.3"/>
+    </filter>
+    
+    <!-- 外部光晕 -->
+    <filter id="outerGlow">
+      <feGaussianBlur stdDeviation="8" result="coloredBlur"/>
+      <feMerge> 
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- 背景圆形 -->
+  <circle cx="512" cy="512" r="480" fill="url(#mainGradient)" filter="url(#outerGlow)"/>
+  
+  <!-- 内部光晕效果 -->
+  <circle cx="512" cy="512" r="400" fill="url(#glowGradient)"/>
+  
+  <!-- 装饰圆环 -->
+  <circle cx="512" cy="512" r="420" fill="none" stroke="#42A5F5" stroke-width="3" opacity="0.4"/>
+  <circle cx="512" cy="512" r="380" fill="none" stroke="#81D4FA" stroke-width="2" opacity="0.3" stroke-dasharray="20,10"/>
+  
+  <!-- 主要文字 5GC -->
+  <text x="512" y="480" font-family="Arial, sans-serif" font-size="180" font-weight="bold" 
+        text-anchor="middle" fill="white" filter="url(#textShadow)">5GC</text>
+  
+  <!-- 副标题 智擎 -->
+  <text x="512" y="580" font-family="Arial, sans-serif" font-size="80" font-weight="500" 
+        text-anchor="middle" fill="#E3F2FD" opacity="0.9">智擎</text>
+  
+  <!-- 装饰光点 -->
+  <circle cx="350" cy="350" r="8" fill="#81D4FA" opacity="0.8">
+    <animate attributeName="opacity" values="0.3;0.8;0.3" dur="2s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="674" cy="350" r="6" fill="#4FC3F7" opacity="0.6">
+    <animate attributeName="opacity" values="0.2;0.6;0.2" dur="3s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="350" cy="674" r="7" fill="#29B6F6" opacity="0.7">
+    <animate attributeName="opacity" values="0.4;0.7;0.4" dur="2.5s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="674" cy="674" r="5" fill="#64B5F6" opacity="0.5">
+    <animate attributeName="opacity" values="0.3;0.5;0.3" dur="1.8s" repeatCount="indefinite"/>
+  </circle>
+</svg> 

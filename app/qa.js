@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -222,7 +222,25 @@ const QA = () => {
   // 复制消息内容
   const copyMessageContent = async (content) => {
     try {
-      await Clipboard.setStringAsync(content);
+      // 使用React Native内置的Clipboard API
+      if (Platform.OS === 'web') {
+        // Web平台使用navigator.clipboard
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(content);
+        } else {
+          // 回退方案
+          const textArea = document.createElement('textarea');
+          textArea.value = content;
+          document.body.appendChild(textArea);
+          textArea.select();
+          document.execCommand('copy');
+          document.body.removeChild(textArea);
+        }
+      } else {
+        // React Native平台使用Clipboard.setString
+        Clipboard.setString(content);
+      }
+      
       // 显示成功提示
       Alert.alert('复制成功', '内容已复制到剪贴板');
     } catch (error) {
@@ -690,7 +708,7 @@ const QA = () => {
                     icon="content-copy"
                     size={20}
                     iconColor={theme.iconInactive}
-                    onPress={() => onCopy(messageContent)}
+                    onPress={() => onCopy(cleanedContent)}
                     style={styles.feedbackButton}
                   />
                   {hasThinking && (
@@ -698,7 +716,7 @@ const QA = () => {
                       icon="thought-bubble"
                       size={20}
                       iconColor={theme.iconInactive}
-                      onPress={() => onCopy(messageContent, message.thinking)}
+                      onPress={() => onCopy(messageContent)}
                       style={styles.feedbackButton}
                     />
                   )}
@@ -733,7 +751,7 @@ const QA = () => {
   });
 
   // 单独的MermaidChart组件，使用WebView本地渲染而不是外部服务
-  const MermaidChart = ({ code, theme, isDark }) => {
+  const MermaidChart = React.memo(({ code, theme, isDark }) => {
     const [isLoading, setIsLoading] = useState(true);
     const [hasError, setHasError] = useState(false);
     const primaryColor = theme?.primary || '#6200ee';
@@ -759,25 +777,12 @@ const QA = () => {
     }, [code]);
     
     // 提取图表标题
-    const title = cleanedCode.split('\n')[0].replace(/^graph\s+|^sequenceDiagram\s+|^flowchart\s+|^classDiagram\s+|^erDiagram\s+|^gantt\s+|^pie\s+/i, '');
+    const title = useMemo(() => {
+      return cleanedCode.split('\n')[0].replace(/^graph\s+|^sequenceDiagram\s+|^flowchart\s+|^classDiagram\s+|^erDiagram\s+|^gantt\s+|^pie\s+/i, '');
+    }, [cleanedCode]);
     
-          // 为Web平台使用DOM渲染器，为原生平台使用WebView
-    if (Platform.OS === 'web') {
-      // 动态导入DOM组件，避免在原生平台上导入
-      const MermaidDOMRenderer = require('../components/MermaidDOMRenderer').default;
-      return (
-        <View style={{ marginVertical: 10, alignItems: 'center' }}>
-          <Surface style={styles.mermaidContainer}>
-            <Text style={styles.mermaidTitle}>{title}</Text>
-            <MermaidDOMRenderer code={cleanedCode} isDark={isDark} theme={theme} />
-          </Surface>
-        </View>
-      );
-    }
-    
-    // 以下是原生平台的WebView实现，保持不变
-    // 创建HTML内容，包含Mermaid.js库和图表定义
-    const htmlContent = `<!DOCTYPE html>
+    // 缓存HTML内容
+    const htmlContent = useMemo(() => `<!DOCTYPE html>
 <html>
   <head>
     <meta charset="utf-8">
@@ -869,10 +874,10 @@ ${cleanedCode}
       }
     </script>
   </body>
-</html>`;
-    
-    // 处理WebView消息
-    const handleMessage = (event) => {
+</html>`, [cleanedCode, isDark]);
+
+    // 缓存消息处理函数
+    const handleMessage = useCallback((event) => {
       try {
         const data = JSON.parse(event.nativeEvent.data);
         if (data.type === 'success') {
@@ -888,14 +893,30 @@ ${cleanedCode}
         setHasError(true);
         setIsLoading(false);
       }
-    };
+    }, []);
     
+    // 为Web平台使用DOM渲染器，为原生平台使用WebView
+    if (Platform.OS === 'web') {
+      // 动态导入DOM组件，避免在原生平台上导入
+      const MermaidDOMRenderer = require('../components/MermaidDOMRenderer').default;
+      return (
+        <View style={{ marginVertical: 10, alignItems: 'center' }}>
+          <Surface style={styles.mermaidContainer}>
+            <Text style={styles.mermaidTitle}>{title}</Text>
+            <MermaidDOMRenderer code={cleanedCode} isDark={isDark} theme={theme} />
+          </Surface>
+        </View>
+      );
+    }
+    
+    // 以下是原生平台的WebView实现，保持不变
+    // 创建HTML内容，包含Mermaid.js库和图表定义
     return (
       <View style={{ marginVertical: 10, alignItems: 'center' }}>
         <Surface style={styles.mermaidContainer}>
           <Text style={styles.mermaidTitle}>{title}</Text>
           
-                        {hasError ? (
+          {hasError ? (
             <View style={styles.mermaidError}>
               <Icon name="alert-circle" size={30} color={theme.error || 'red'} />
               <Text style={{ marginTop: 8, color: theme.error || 'red' }}>
@@ -955,7 +976,7 @@ ${cleanedCode}
         </Surface>
       </View>
     );
-  };
+  });
 
   // 渲染欢迎界面
   const renderWelcomeScreen = () => {

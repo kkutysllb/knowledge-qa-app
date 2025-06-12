@@ -35,13 +35,21 @@ const LoginScreen = () => {
   const [userAgreementVisible, setUserAgreementVisible] = useState(false);
   const [privacyPolicyVisible, setPrivacyPolicyVisible] = useState(false);
   const { theme, themeType, currentThemeType, getStatusBarStyle } = useTheme();
-  const { isAuthenticated, login, loading, error, clearError } = useAuth();
+  const { isAuthenticated, login, loading, error, clearError, currentSelectedNode } = useAuth();
+  
+  // 服务节点选择：从AuthContext获取当前节点
+  const [selectedNode, setSelectedNode] = useState(currentSelectedNode);
   
   // 判断是否是深色模式
   const isDark = currentThemeType === ThemeType.DARK;
   
   // 创建动态样式
   const dynamicStyles = useMemo(() => createStyles(theme, isDark), [theme, isDark]);
+  
+  // 同步AuthContext中的节点选择
+  useEffect(() => {
+    setSelectedNode(currentSelectedNode);
+  }, [currentSelectedNode]);
   
   // 监听登录状态变化
   useEffect(() => {
@@ -81,9 +89,17 @@ const LoginScreen = () => {
       return;
     }
     
+    // 延安节点提醒用户先打开VPN
+    if (selectedNode === 'yanan') {
+      setSnackbarMessage('请确保已打开零信任VPN客户端后再登录');
+      setSnackbarVisible(true);
+      // 给用户时间阅读提醒
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+    
     try {
-      // 调用登录函数
-      const success = await login(username, password);
+      // 调用登录函数，传递节点信息
+      const success = await login(username, password, selectedNode);
       if (success) {
         console.log('登录成功，即将跳转到问答页面');
       }
@@ -364,6 +380,68 @@ const LoginScreen = () => {
             </View>
           </View>
           
+          {/* 服务节点选择 */}
+          <View style={dynamicStyles.nodeSelectionContainer}>
+            <Text style={dynamicStyles.nodeSelectionTitle}>服务节点</Text>
+            <View style={dynamicStyles.radioGroup}>
+              <TouchableOpacity 
+                style={dynamicStyles.radioOption}
+                onPress={() => setSelectedNode('provincial')}
+                disabled={loading}
+              >
+                <View style={[
+                  dynamicStyles.radioButton,
+                  selectedNode === 'provincial' && dynamicStyles.radioButtonSelected
+                ]}>
+                  {selectedNode === 'provincial' && (
+                    <View style={dynamicStyles.radioButtonInner} />
+                  )}
+                </View>
+                <Text style={[
+                  dynamicStyles.radioText,
+                  selectedNode === 'provincial' && dynamicStyles.radioTextSelected
+                ]}>
+                  省端X节点
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={dynamicStyles.radioOption}
+                onPress={() => setSelectedNode('yanan')}
+                disabled={loading}
+              >
+                <View style={[
+                  dynamicStyles.radioButton,
+                  selectedNode === 'yanan' && dynamicStyles.radioButtonSelected
+                ]}>
+                  {selectedNode === 'yanan' && (
+                    <View style={dynamicStyles.radioButtonInner} />
+                  )}
+                </View>
+                <Text style={[
+                  dynamicStyles.radioText,
+                  selectedNode === 'yanan' && dynamicStyles.radioTextSelected
+                ]}>
+                  延安智算节点
+                </Text>
+              </TouchableOpacity>
+            </View>
+            
+            {selectedNode === 'yanan' && (
+              <View style={dynamicStyles.vpnNotice}>
+                <Ionicons 
+                  name="warning-outline" 
+                  size={16} 
+                  color={theme.warning || '#ff9800'} 
+                  style={dynamicStyles.warningIcon}
+                />
+                <Text style={dynamicStyles.vpnNoticeText}>
+                  请先打开零信任VPN客户端再登录
+                </Text>
+              </View>
+            )}
+          </View>
+          
           <View style={dynamicStyles.checkboxContainer}>
             <Checkbox.Android
               status={checked ? 'checked' : 'unchecked'}
@@ -485,6 +563,80 @@ const createStyles = (theme, isDark) => StyleSheet.create({
     padding: 8,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  // 服务节点选择样式
+  nodeSelectionContainer: {
+    marginBottom: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: isDark ? theme.card : theme.surface,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  nodeSelectionTitle: {
+    fontSize: 14,
+    color: theme.text,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  radioGroup: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  radioOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  radioButton: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    borderColor: theme.border,
+    marginRight: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  radioButtonSelected: {
+    borderColor: theme.primary,
+  },
+  radioButtonInner: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: theme.primary,
+  },
+  radioText: {
+    fontSize: 14,
+    color: theme.textSecondary,
+    flex: 1,
+  },
+  radioTextSelected: {
+    color: theme.primary,
+    fontWeight: '600',
+  },
+  vpnNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    backgroundColor: isDark ? '#2d1b12' : '#fff3e0',
+    borderRadius: 4,
+    borderLeftWidth: 3,
+    borderLeftColor: theme.warning || '#ff9800',
+  },
+  warningIcon: {
+    marginRight: 6,
+  },
+  vpnNoticeText: {
+    fontSize: 12,
+    color: theme.warning || '#ff9800',
+    flex: 1,
   },
   checkboxContainer: {
     flexDirection: 'row',

@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { getAllNodes, getCurrentNode, loadSavedNode, setCurrentNode } from '../config/api.config';
 import { login as apiLogin, getUserInfo } from '../utils/api';
 
 // 创建认证上下文
@@ -11,12 +12,18 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [currentSelectedNode, setCurrentSelectedNode] = useState('provincial');
 
-  // 加载已保存的认证状态
+  // 加载已保存的认证状态和节点配置
   useEffect(() => {
     const loadAuthState = async () => {
       try {
         setLoading(true);
+        
+        // 首先加载节点配置
+        await loadSavedNode();
+        setCurrentSelectedNode(getCurrentNode());
+        
         const savedToken = await AsyncStorage.getItem('token');
         
         if (savedToken) {
@@ -44,11 +51,17 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   // 登录函数
-  const login = async (username, password) => {
+  const login = async (username, password, selectedNode = 'provincial') => {
     setLoading(true);
     setError(null);
     
     try {
+      // 设置选择的节点
+      await setCurrentNode(selectedNode);
+      setCurrentSelectedNode(selectedNode);
+      
+      console.log(`🔄 使用节点 ${selectedNode} 进行登录`);
+      
       const response = await apiLogin(username, password);
       
       // 保存token
@@ -70,6 +83,18 @@ export const AuthProvider = ({ children }) => {
       return false;
     } finally {
       setLoading(false);
+    }
+  };
+
+  // 切换节点函数
+  const switchNode = async (nodeKey) => {
+    try {
+      await setCurrentNode(nodeKey);
+      setCurrentSelectedNode(nodeKey);
+      console.log(`✅ 节点已切换到: ${nodeKey}`);
+    } catch (error) {
+      console.error('切换节点失败:', error);
+      setError('切换节点失败');
     }
   };
 
@@ -96,8 +121,11 @@ export const AuthProvider = ({ children }) => {
     loading,
     error,
     isAuthenticated: !!token,
+    currentSelectedNode,
+    availableNodes: getAllNodes(),
     login,
     logout,
+    switchNode,
     clearError,
   };
 

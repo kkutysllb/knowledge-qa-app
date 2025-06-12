@@ -11,6 +11,8 @@ import { createTheme } from '../src/theme/theme';
 import { AuthProvider } from '../src/context/AuthContext';
 import { ChatProvider } from '../src/context/ChatContext';
 import { ThemeProvider, ThemeType, useTheme } from '../src/context/ThemeContext';
+// 导入节点配置
+import { loadSavedNode } from '../src/config/api.config';
 
 // 创建一个包装组件来使用ThemeContext
 const ThemedApp = () => {
@@ -106,6 +108,20 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
 }
 
 export default function RootLayout() {
+  // 在应用启动时加载节点配置
+  useEffect(() => {
+    const initializeApp = async () => {
+      try {
+        await loadSavedNode();
+        console.log('✅ 节点配置初始化完成');
+      } catch (error) {
+        console.error('❌ 节点配置初始化失败:', error);
+      }
+    };
+    
+    initializeApp();
+  }, []);
+
   return (
     <ErrorBoundary>
       <ThemeProvider>
