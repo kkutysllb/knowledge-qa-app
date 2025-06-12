@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "knowledge-qa-app",
+    "name": "5GC智擎知识问答",
     "slug": "knowledge-qa-app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -12,11 +12,19 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.sncc.knowledgeqa",
+      "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.CAMERA"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -33,10 +41,22 @@
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
         }
+      ],
+      [
+        "expo-document-picker",
+        {
+          "iCloudContainerEnvironment": "Production"
+        }
       ]
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "c4bcb6ca-4c93-49f0-9a75-2b5f13983bd1"
+      }
     }
   }
 }
