@@ -6,15 +6,15 @@
 // 不同环境的API配置
 const ENV = {
   development: {
-    API_BASE_URL: 'http://172.16.20.20:8030',
+    API_BASE_URL: 'http://111.19.156.74:8030',
     TIMEOUT: 30000, // 30秒
   },
   production: {
-    API_BASE_URL: 'http://172.16.20.20:8030', // 生产环境地址，后续可以替换
+    API_BASE_URL: 'http://111.19.156.74:8030', // 生产环境地址，后续可以替换
     TIMEOUT: 30000,
   },
   test: {
-    API_BASE_URL: 'http://172.16.20.20:8030', // 测试环境地址
+    API_BASE_URL: 'http://111.19.156.74:8030', // 测试环境地址
     TIMEOUT: 30000,
   }
 };

@@ -99,6 +99,7 @@ const QA = () => {
     selectedKnowledgeBase,
     models,
     selectedModel,
+    setSelectedModel,
     conversations,
     loadConversations,
     selectConversation,

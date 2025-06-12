@@ -167,25 +167,59 @@ export const knowledgeQAWithFile = async (
     // 创建FormData对象
     const formData = new FormData();
     formData.append('query', query);
-    formData.append('use_kb', useKb.toString());
-    formData.append('model', model);
-    formData.append('kb_name', kbName);
-    formData.append('stream', stream.toString());
     
-    // 添加文件
-    if (file) {
-      const fileToUpload = {
-        uri: file.uri,
-        name: file.name,
-        type: file.mimeType || 'application/octet-stream'
-      };
-      formData.append('file', fileToUpload);
+    // 确保布尔值以正确格式发送
+    formData.append('use_kb', useKb ? 'true' : 'false');
+    formData.append('stream', stream ? 'true' : 'false');
+    
+    // 其他参数
+    formData.append('model', model);
+    if (kbName) {
+      formData.append('kb_name', kbName);
     }
     
-    // 设置headers
-    const headers = {
-      'Content-Type': 'multipart/form-data',
-    };
+    // 添加缺少的参数，与Web端保持一致
+    formData.append('temperature', '0.7');
+    formData.append('max_tokens', '8192');
+    
+    // 添加文件 - 解决422错误的关键修复
+    if (file) {
+      const fileName = file.name || `file_${Date.now()}`;
+      const fileType = file.mimeType || file.type || 'application/octet-stream';
+      
+      console.log('文件上传信息:', {
+        fileName,
+        fileType,
+        uri: file.uri
+      });
+      
+      // 关键修复：读取文件内容并创建真正的Blob对象
+      try {
+        // 使用fetch读取文件内容
+        const fileResponse = await fetch(file.uri);
+        const fileBlob = await fileResponse.blob();
+        
+        console.log('文件Blob信息:', {
+          size: fileBlob.size,
+          type: fileBlob.type
+        });
+        
+        // 将Blob对象添加到FormData，这样服务器就能正确识别为文件
+        formData.append('file', fileBlob, fileName);
+        
+      } catch (fileError) {
+        console.error('读取文件失败:', fileError);
+        // 如果Blob方法失败，回退到原始方法
+        formData.append('file', {
+          uri: file.uri,
+          name: fileName,
+          type: fileType
+        });
+      }
+    }
+    
+    // 设置headers - 不要手动设置Content-Type
+    const headers = {};
     
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
@@ -193,6 +227,42 @@ export const knowledgeQAWithFile = async (
     
     // 构建URL
     const url = `${API_BASE_URL}/api/workflows/knowledge-qa/upload`;
+    
+    console.log('发送文件上传请求:', {
+      url,
+      query: query.substring(0, 50) + '...',
+      fileName: file?.name,
+      fileSize: file?.size,
+      fileType: file?.mimeType || file?.type,
+      useKb,
+      model,
+      kbName,
+      stream
+    });
+    
+    // 调试：输出FormData的内容（仅开发环境）
+    if (__DEV__) {
+      console.log('FormData内容:');
+      for (let [key, value] of formData.entries()) {
+        if (key === 'file') {
+          if (value instanceof Blob) {
+            console.log(`${key}:`, {
+              type: 'Blob',
+              size: value.size,
+              mimeType: value.type
+            });
+          } else {
+            console.log(`${key}:`, {
+              name: value.name,
+              type: value.type,
+              uri: value.uri?.substring(0, 50) + '...'
+            });
+          }
+        } else {
+          console.log(`${key}:`, value);
+        }
+      }
+    }
     
     // 如果是流式响应，返回处理函数
     if (stream) {
@@ -203,7 +273,27 @@ export const knowledgeQAWithFile = async (
       });
       
       if (!response.ok) {
-        throw new Error(`Stream request failed: ${response.status}`);
+        // 获取详细错误信息
+        let errorMessage = `Stream request failed: ${response.status}`;
+        try {
+          const errorText = await response.text();
+          console.log('服务器错误响应:', errorText);
+          
+          // 尝试解析JSON错误
+          try {
+            const errorData = JSON.parse(errorText);
+            errorMessage = errorData.message || errorData.detail || errorMessage;
+          } catch (e) {
+            // 如果不是JSON，使用原始文本
+            if (errorText) {
+              errorMessage = `${errorMessage}: ${errorText.substring(0, 200)}`;
+            }
+          }
+        } catch (e) {
+          console.error('无法读取错误响应:', e);
+        }
+        
+        throw new Error(errorMessage);
       }
       
       return response;
@@ -216,13 +306,25 @@ export const knowledgeQAWithFile = async (
       });
       
       if (!response.ok) {
-        const text = await response.text();
+        // 获取详细错误信息
+        let errorMessage = `请求失败: ${response.status}`;
         try {
-          const errorData = JSON.parse(text);
-          throw new Error(errorData.message || `请求失败: ${response.status}`);
+          const errorText = await response.text();
+          console.log('服务器错误响应:', errorText);
+          
+          try {
+            const errorData = JSON.parse(errorText);
+            errorMessage = errorData.message || errorData.detail || errorMessage;
+          } catch (e) {
+            if (errorText) {
+              errorMessage = `${errorMessage}: ${errorText.substring(0, 200)}`;
+            }
+          }
         } catch (e) {
-          throw new Error(`请求失败: ${response.status}, ${text.substring(0, 100)}`);
+          console.error('无法读取错误响应:', e);
         }
+        
+        throw new Error(errorMessage);
       }
       
       const contentType = response.headers.get('content-type');
