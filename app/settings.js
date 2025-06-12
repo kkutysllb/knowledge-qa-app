@@ -26,8 +26,7 @@ const SettingsScreen = () => {
   const { themeType, setTheme, theme, currentThemeType, getStatusBarStyle } = useTheme();
   const { user, isAuthenticated, logout } = useAuth();
   const [language, setLanguage] = useState('中文 (简体中文)');
-  const [themeMenuVisible, setThemeMenuVisible] = useState(false);
-  const [themeModalVisible, setThemeModalVisible] = useState(false);
+
   const [serviceAgreementModalVisible, setServiceAgreementModalVisible] = useState(false);
   const [contactUsModalVisible, setContactUsModalVisible] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -46,11 +45,7 @@ const SettingsScreen = () => {
     }
   }, [isAuthenticated]);
 
-  const handleThemeChange = (newTheme) => {
-    console.log('切换主题为:', newTheme);
-    setTheme(newTheme);
-    setThemeModalVisible(false);
-  };
+
   
   // 处理退出登录
   const handleLogout = useCallback(async () => {
@@ -225,27 +220,7 @@ const SettingsScreen = () => {
                 </View>
               </View>
 
-              <Divider style={dynamicStyles.divider} />
 
-              <TouchableOpacity
-                style={dynamicStyles.itemContainer}
-                onPress={() => setThemeModalVisible(true)}
-              >
-                <View style={dynamicStyles.iconContainer}>
-                  <List.Icon icon="theme-light-dark" color={theme.icon} />
-                </View>
-                <View style={dynamicStyles.textContainer}>
-                  <Text style={dynamicStyles.itemTitle}>外观</Text>
-                  <Text style={dynamicStyles.itemDescription}>
-                    {themeType === ThemeType.LIGHT 
-                      ? '浅色' 
-                      : themeType === ThemeType.DARK 
-                        ? '深色（黑色）' 
-                        : '随系统'}
-                  </Text>
-                </View>
-                <List.Icon icon="chevron-right" color={theme.icon} />
-              </TouchableOpacity>
             </View>
 
             {/* 关于 */}
@@ -312,68 +287,7 @@ const SettingsScreen = () => {
             <View style={dynamicStyles.safeBottom} />
         </ScrollView>
           
-          {/* 主题选择模态框 */}
-          <Portal>
-            <Modal
-              visible={themeModalVisible}
-              onDismiss={() => setThemeModalVisible(false)}
-              contentContainerStyle={dynamicStyles.modalContainer}
-            >
-              <Text style={dynamicStyles.modalTitle}>外观</Text>
-              
-              <TouchableOpacity 
-                style={dynamicStyles.modalOption}
-                onPress={() => handleThemeChange(ThemeType.SYSTEM)}
-              >
-                <View style={dynamicStyles.radioContainer}>
-                  <View style={[
-                    dynamicStyles.radioOuter,
-                    themeType === ThemeType.SYSTEM && dynamicStyles.radioOuterSelected
-                  ]}>
-                    {themeType === ThemeType.SYSTEM && <View style={dynamicStyles.radioInner} />}
-                  </View>
-                  <Text style={dynamicStyles.modalOptionText}>系统</Text>
-                </View>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={dynamicStyles.modalOption}
-                onPress={() => handleThemeChange(ThemeType.LIGHT)}
-              >
-                <View style={dynamicStyles.radioContainer}>
-                  <View style={[
-                    dynamicStyles.radioOuter,
-                    themeType === ThemeType.LIGHT && dynamicStyles.radioOuterSelected
-                  ]}>
-                    {themeType === ThemeType.LIGHT && <View style={dynamicStyles.radioInner} />}
-                  </View>
-                  <Text style={dynamicStyles.modalOptionText}>浅色</Text>
-                </View>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={dynamicStyles.modalOption}
-                onPress={() => handleThemeChange(ThemeType.DARK)}
-              >
-                <View style={dynamicStyles.radioContainer}>
-                  <View style={[
-                    dynamicStyles.radioOuter,
-                    themeType === ThemeType.DARK && dynamicStyles.radioOuterSelected
-                  ]}>
-                    {themeType === ThemeType.DARK && <View style={dynamicStyles.radioInner} />}
-                  </View>
-                  <Text style={dynamicStyles.modalOptionText}>深色</Text>
-                </View>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={dynamicStyles.confirmButton}
-                onPress={() => setThemeModalVisible(false)}
-              >
-                <Text style={dynamicStyles.confirmButtonText}>确认</Text>
-              </TouchableOpacity>
-            </Modal>
-          </Portal>
+
 
           {/* 服务协议模态框 */}
           <Portal>
@@ -556,83 +470,7 @@ const createStyles = (theme) => StyleSheet.create({
     backgroundColor: theme.divider,
     marginLeft: 64, // 与图标对齐
   },
-  modalContainer: {
-    margin: 40,
-    marginTop: 100,
-    marginBottom: 100,
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 0,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-  },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  modalTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#000',
-    textAlign: 'center',
-    paddingVertical: 16,
-    borderBottomWidth: 0.5,
-    borderBottomColor: '#EEEEEE',
-  },
-  modalOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderBottomWidth: 0.5,
-    borderBottomColor: '#EEEEEE',
-  },
-  modalOptionText: {
-    fontSize: 16,
-    color: '#000',
-    marginLeft: 12,
-  },
-  selectedOption: {
-    fontWeight: 'bold',
-    color: theme.primary,
-  },
-  confirmButton: {
-    paddingVertical: 16,
-    alignItems: 'center',
-    borderTopWidth: 0.5,
-    borderTopColor: '#EEEEEE',
-  },
-  confirmButtonText: {
-    fontSize: 16,
-    color: '#0A59F7',
-    fontWeight: '600',
-  },
-  radioContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  radioOuter: {
-    width: 22,
-    height: 22,
-    borderWidth: 1,
-    borderColor: '#CCCCCC',
-    borderRadius: 11,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  radioOuterSelected: {
-    borderColor: '#0A59F7',
-    borderWidth: 1,
-  },
-  radioInner: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: '#0A59F7',
-  },
+
   logoutContainer: {
     paddingHorizontal: 20,
     marginBottom: 24,

@@ -44,7 +44,7 @@ export const ChatProvider = ({ children }) => {
   // 状态管理
   const [conversations, setConversations] = useState([]);
   const [currentConversationId, setCurrentConversationId] = useState(null);
-  const [messages, setMessages] = useState([initialSystemMessage]);
+  const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -75,7 +75,7 @@ export const ChatProvider = ({ children }) => {
       // 如果用户未登录，重置状态
       setConversations([]);
       setCurrentConversationId(null);
-      setMessages([initialSystemMessage]);
+      setMessages([]);
     }
   }, [isAuthenticated, user]);
   
@@ -84,10 +84,153 @@ export const ChatProvider = ({ children }) => {
     if (currentConversationId) {
       loadConversationMessages(currentConversationId);
     } else {
-      // 如果没有选择会话，重置消息为初始状态
-      setMessages([initialSystemMessage]);
+      // 如果没有选择会话，重置消息为空状态（删除初始系统消息）
+      setMessages([]);
     }
   }, [currentConversationId]);
+  
+  // 核心：监听消息变化并自动保存对话（参考web端实现）
+  useEffect(() => {
+    // 避免在初始化或消息内容为空时触发
+    if (messages.length <= 0 || !messages.some(msg => msg.role === 'user')) return;
+    
+    // 找到第一条用户消息作为会话标题
+    const firstUserMessage = messages.find(msg => msg.role === 'user');
+    if (!firstUserMessage) return;
+    
+    const title = firstUserMessage.content.length > 30 
+      ? firstUserMessage.content.substring(0, 30) + '...'
+      : firstUserMessage.content;
+    
+    const now = new Date();
+    
+    console.log('消息变化触发保存逻辑:', {
+      messagesCount: messages.length,
+      currentConversationId,
+      firstUserContent: firstUserMessage.content.substring(0, 50)
+    });
+    
+    // 使用引用对比避免不必要的更新
+    if (currentConversationId) {
+      // 更新现有会话
+      const currentConvInHistory = conversations.find(conv => conv.id === currentConversationId);
+      
+      // 检查消息是否有变化，避免不必要的状态更新
+      const hasChanged = !currentConvInHistory || 
+        currentConvInHistory.messages.length !== messages.length ||
+        JSON.stringify(currentConvInHistory.messages.map(m => ({id: m.id, content: m.content}))) !==
+          JSON.stringify(messages.map(m => ({id: m.id, content: m.content})));
+      
+      if (hasChanged) {
+        console.log('检测到现有会话消息变化，更新会话');
+        
+        const updatedHistory = conversations.map(conv => {
+          if (conv.id === currentConversationId) {
+            return {
+              ...conv,
+              messages: messages,
+              title: title,
+              updatedAt: now,
+              synced: false
+            };
+          }
+          return conv;
+        });
+        
+        // 使用函数形式更新，确保使用最新状态
+        setConversations(prevHistory => {
+          // 如果相同则不更新
+          if (JSON.stringify(prevHistory) === JSON.stringify(updatedHistory)) {
+            return prevHistory;
+          }
+          
+          // 保存到localStorage作为备份
+          saveHistoryToLocalStorage(updatedHistory);
+          
+          // 尝试同步到服务器
+          const currentConv = updatedHistory.find(conv => conv.id === currentConversationId);
+          if (currentConv) {
+            syncToServer(currentConv).then(success => {
+              if (success) {
+                // 同步成功后更新本地状态
+                setConversations(prevHistory => 
+                  prevHistory.map(conv => 
+                    conv.id === currentConversationId 
+                      ? { ...conv, synced: true }
+                      : conv
+                  )
+                );
+              }
+            }).catch(console.error);
+          }
+          
+          return updatedHistory;
+        });
+      }
+    } else if (messages.some(msg => msg.role === 'user') && messages.some(msg => msg.role === 'assistant' && !msg.loading && msg.content && msg.content.length > 0)) {
+      // 创建新会话（只有当有用户消息和有效的AI回复时才创建）
+      console.log('检测到新对话需要保存');
+      
+      // 获取当前登录用户的ID
+      let userId = '';
+      try {
+        if (user && user.id) {
+          userId = user.id;
+        }
+      } catch (e) {
+        console.error('获取用户ID失败:', e);
+      }
+      
+      // 创建新会话（使用UUID而不是时间戳，避免重复ID）
+      const newConversation = {
+        id: uuidv4(),
+        title: title,
+        messages: messages,
+        createdAt: now,
+        updatedAt: now,
+        userId: userId,
+        synced: false
+      };
+      
+      // 判断是否需要添加新会话 - 更严格的判断，避免重复添加相似会话
+      const conversationExists = conversations.some(conv => {
+        // 检查标题和第一条用户消息是否相同
+        const convFirstUserMsg = conv.messages.find(msg => msg.role === 'user');
+        const currentFirstUserMsg = messages.find(msg => msg.role === 'user');
+        
+        return (
+          convFirstUserMsg && 
+          currentFirstUserMsg && 
+          convFirstUserMsg.content === currentFirstUserMsg.content
+        );
+      });
+      
+      if (!conversationExists) {
+        console.log('创建新会话:', newConversation.id);
+        
+        const updatedHistory = [newConversation, ...conversations];
+        setConversations(updatedHistory);
+        setCurrentConversationId(newConversation.id);
+        
+        // 保存到localStorage作为备份
+        saveHistoryToLocalStorage(updatedHistory);
+        
+        // 尝试同步到服务器
+        syncToServer(newConversation).then(success => {
+          if (success) {
+            // 同步成功后更新本地状态
+            setConversations(prevHistory => 
+              prevHistory.map(conv => 
+                conv.id === newConversation.id 
+                  ? { ...conv, synced: true }
+                  : conv
+              )
+            );
+          }
+        }).catch(console.error);
+      }
+    }
+  }, [messages, currentConversationId, conversations, user]);
   
   // 保存历史记录到本地存储
   const saveHistoryToLocalStorage = async (history) => {
@@ -331,8 +474,8 @@ export const ChatProvider = ({ children }) => {
     try {
       setLoading(true);
       
-      // 清空状态
-      setMessages([initialSystemMessage]);
+      // 清空状态（不添加系统消息，保持空状态）
+      setMessages([]);
       setStreamingContent('');
       setCurrentConversationId(null);
       setCurrentAttachment(null);
@@ -348,8 +491,10 @@ export const ChatProvider = ({ children }) => {
         {
           id: 'error-' + Date.now(),
           content: `创建新对话时出错: ${error.message}`,
+          role: 'system',
           type: 'system',
           isError: true,
+          timestamp: new Date()
         },
       ]);
     } finally {
@@ -494,53 +639,13 @@ export const ChatProvider = ({ children }) => {
       // 添加AI响应消息到对话
       setMessages([...updatedMessages, assistantMessage]);
       
-      // 如果没有当前会话，创建一个新会话
+      // 如果没有当前会话，设置一个临时ID，让useEffect自动创建会话
       let conversationId = currentConversationId;
-      let currentConversation;
       
       if (!conversationId) {
-        // 创建新会话
-        conversationId = uuidv4();
-        
-        // 基于用户第一条消息创建会话标题
-        const title = content.length > 30 ? content.substring(0, 30) + '...' : content;
-        
-        currentConversation = {
-          id: conversationId,
-          title,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          userId: user?.id,
-          messages: [userMessage, assistantMessage],
-          synced: false
-        };
-        
-        // 添加到会话列表
-        setConversations(prev => [currentConversation, ...prev]);
-        setCurrentConversationId(conversationId);
-      } else {
-        // 更新现有会话
-        currentConversation = conversations.find(conv => conv.id === conversationId);
-        
-        if (currentConversation) {
-          currentConversation = {
-            ...currentConversation,
-            updatedAt: new Date(),
-            messages: [...(currentConversation.messages || []), userMessage, assistantMessage],
-            synced: false
-          };
-          
-          // 更新会话列表
-          setConversations(prev => 
-            prev.map(conv => conv.id === conversationId ? currentConversation : conv)
-          );
-        }
-
-      }
-      
-      // 保存更新后的会话到本地存储
-      if (currentConversation) {
-        await saveHistoryToLocalStorage([...conversations]);
+        // 不在这里创建会话，让useEffect监听messages变化时自动创建
+        // 这样避免重复创建会话的问题
+        console.log('当前无会话，将由useEffect自动创建新会话');
       }
       
       // 如果是流式响应，开始流式响应处理
@@ -671,31 +776,8 @@ export const ChatProvider = ({ children }) => {
             return updated;
           });
           
-          // 更新当前会话
-          if (conversationId) {
-            const updatedConversation = conversations.find(conv => conv.id === conversationId);
-            if (updatedConversation) {
-              const updatedWithMessage = {
-                ...updatedConversation,
-                updatedAt: new Date(),
-                messages: updatedConversation.messages.map(msg => 
-                  msg.id === assistantMessageId ? finalAssistantMessage : msg
-                )
-              };
-              
-              // 更新会话列表
-              setConversations(prev => 
-                prev.map(conv => conv.id === conversationId ? updatedWithMessage : conv)
-              );
-              
-              // 保存到本地存储
-              await saveHistoryToLocalStorage([...conversations]);
-              
-              // 尝试同步到服务器
-              setNeedsSync(true);
-              await syncToServer(updatedWithMessage);
-            }
-          }
+          // 不需要在这里手动保存，useEffect会自动监听messages变化并保存
+          console.log('附件流式响应完成，等待useEffect自动保存');
         } finally {
           // 清除当前附件
           setCurrentAttachment(null);
@@ -860,31 +942,8 @@ export const ChatProvider = ({ children }) => {
             return updated;
           });
           
-          // 更新当前会话
-          if (conversationId) {
-            const updatedConversation = conversations.find(conv => conv.id === conversationId);
-            if (updatedConversation) {
-              const updatedWithMessage = {
-                ...updatedConversation,
-                updatedAt: new Date(),
-                messages: updatedConversation.messages.map(msg => 
-                  msg.id === assistantMessageId ? finalAssistantMessage : msg
-                )
-              };
-              
-              // 更新会话列表
-              setConversations(prev => 
-                prev.map(conv => conv.id === conversationId ? updatedWithMessage : conv)
-              );
-              
-              // 保存到本地存储
-              await saveHistoryToLocalStorage([...conversations]);
-              
-              // 尝试同步到服务器
-              setNeedsSync(true);
-              await syncToServer(updatedWithMessage);
-            }
-          }
+          // 不需要在这里手动保存，useEffect会自动监听messages变化并保存
+          console.log('普通流式响应完成，等待useEffect自动保存');
         } catch (error) {
           console.error('流式请求处理错误:', error);
           throw error;

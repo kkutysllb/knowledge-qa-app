@@ -1258,7 +1258,10 @@ ${cleanedCode}
             onPress={toggleDrawer}
           />
           <Text style={styles.headerTitle}>
-            新对话
+            {currentConversationId ? 
+              (conversations.find(conv => conv.id === currentConversationId)?.title || '对话') 
+              : '新对话'
+            }
           </Text>
           <View style={styles.headerRightContainer}>
             <IconButton
@@ -1277,7 +1280,7 @@ ${cleanedCode}
             { opacity: fadeAnim }
           ]}
         >
-          {messages.length <= 1 ? (
+          {messages.length === 0 ? (
             renderWelcomeScreen()
           ) : (
             <ScrollView
