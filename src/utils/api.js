@@ -511,6 +511,7 @@ export const streamKnowledgeQA = async (data, onChunk) => {
       method: 'POST',
       headers,
       body: JSON.stringify(data),
+      timeout: 60000, // 流式响应需要更长的超时时间
     });
     
     if (!response.ok) {
