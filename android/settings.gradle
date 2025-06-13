@@ -1,0 +1,4 @@
+// 这个文件会被Expo生成的文件覆盖，但是确保目录结构正确
+// 这是一个占位符settings.gradle文件
+rootProject.name = "knowledge-qa-app"
+include ':app' 
