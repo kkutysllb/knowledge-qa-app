@@ -26,18 +26,7 @@
         "android.permission.CAMERA"
       ],
       "usesCleartextTraffic": true,
-      "networkSecurityConfig": {
-        "domain-config": [
-          {
-            "domain": "111.19.156.74",
-            "cleartextTrafficPermitted": true
-          },
-          {
-            "domain": "172.16.20.20",
-            "cleartextTrafficPermitted": true
-          }
-        ]
-      }
+      "networkSecurityConfig": "./android/app/src/main/res/xml/network_security_config.xml"
     },
     "web": {
       "bundler": "metro",
